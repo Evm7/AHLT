@@ -1,4 +1,21 @@
-[25-02-2021] When running with the default arguments (in Train) and using External Resources, F1-Score is around 55.5%
+[25-02-2021] Improvement of Rules, F1-Score is around 58%
+
+                   
+|                 |  tp  |  fp  |  fn  | #pred |  #exp |   P   |   R   |   F1  |
+|:---------------:|:----:|:----:|:----:|:-----:|:-----:|:-----:|:-----:|:-----:|
+| -               |   -  |   -  |   -  |   -   |   -   |   -   |   -   |       |
+| brand           |  616 | 3206 |  542 |  3822 |  1158 | 16.1% | 53.2% | 24.7% |
+| drug            | 5661 | 1476 | 1595 |  7137 |  7256 | 79.3% | 78.0% | 78.7% |
+| drug_n          |   0  |   0  |  527 |   0   |  527  |  0.0% |  0.0% |  0.0% |
+| group           |  519 | 1366 | 2167 |  1885 |  2686 | 27.5% | 19.3% | 22.7% |
+| -               |   -  |   -  |   -  |   -   |   -   |   -   |   -   |   -   |
+| M.avg           |   -  |   -  |   -  |   -   |   -   | 30.7% | 37.6% | 31.5% |
+| -               |   -  |   -  |   -  |   -   |   -   |   -   |   -   |   -   |
+| m.avg           | 6796 | 6048 | 4831 | 12844 | 11627 | 52.9% | 58.5% | 55.5% |
+| m.avg(no class) | 7372 | 5472 | 4255 | 12844 | 11627 | 57.4% | 63.4% | 60.3% |
+
+
+[24-02-2021] When running with the default arguments (in Train) and using External Resources, F1-Score is around 55.5%
 
                    
 |                 |  tp  |  fp  |  fn  | #pred |  #exp |   P   |   R   |   F1  |
