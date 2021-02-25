@@ -1,4 +1,4 @@
-[25-02-2021] When running with the default arguments (in Train) and using External Resources, F1-Score is arounf 55.5%
+[25-02-2021] When running with the default arguments (in Train) and using External Resources, F1-Score is around 55.5%
 
                    
 |                 |  tp  |  fp  |  fn  | #pred |  #exp |   P   |   R   |   F1  |
