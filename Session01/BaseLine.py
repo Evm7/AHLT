@@ -6,8 +6,9 @@ from os import listdir
 import string
 import pandas as pd
 
+sys.path.append("../")
 
-#import evaluator
+import evaluator
 
 from xml.dom.minidom import parse
 
@@ -23,7 +24,7 @@ class BaselineNer():
     def __init__(self):
         args = self.parse_arguments()
 
-        self.datadir = args["datadir"]
+        self.datadir = "../"+ args["datadir"]
         self.outfile_name = args["outfile"]
         self.external = args["external"]
 
@@ -47,7 +48,7 @@ class BaselineNer():
     def parse_arguments(self):
         # construct the argument parser
         parser = argparse.ArgumentParser()
-        parser.add_argument('-datadir', '--datadir', type=str, default="data/devel/", help='Directory with XML files to process')
+        parser.add_argument('-datadir', '--datadir', type=str, default="data/train/", help='Directory with XML files to process')
         parser.add_argument('-outfile', '--outfile', type=str, default="result.out", help='Name for the output file')
         parser.add_argument('--external', action="store_false", default=True, help='Whether to use external resources or not')
 
@@ -57,7 +58,7 @@ class BaselineNer():
     def extract_dict(self):
         if self.external:
             # Loading DrugBank.txt
-            with open("resources/DrugBank.txt", 'r', encoding='utf8') as doc:
+            with open("../resources/DrugBank.txt", 'r', encoding='utf8') as doc:
                 document = doc.readlines()
 
             self.drugbank_dict = {}
@@ -66,7 +67,7 @@ class BaselineNer():
                 self.drugbank_dict[sep[0]] = sep[-1].rstrip()
 
             # Loading HSDB.txt
-            with open("resources/HSDB.txt", 'r', encoding='utf8') as doc:
+            with open("../resources/HSDB.txt", 'r', encoding='utf8') as doc:
                 document = doc.readlines()
 
             self.HSDB = []
@@ -132,7 +133,7 @@ class BaselineNer():
         return entities
 
     def createMap(self, token, type):
-        return  {'name': token[0], 'offset': str(token[1])+" -" +str(token[2]), 'type': type}
+        return  {'name': token[0], 'offset': str(token[1])+"-" +str(token[2]), 'type': type}
 
     def check_Prefixes(self, tok, pref):
         for p in pref:
@@ -169,8 +170,9 @@ class BaselineNer():
                 # print sentence entities in format requested for evaluation
                 for e in entities:
                     print(sid + "|" + e["offset"] + "|" + e["name"] + "|" + e["type"], file = self.f)
+        self.f.close()
         # print performance score
-        #evaluator.evaluate("NER", self.datadir, self.outfile_name)
+        evaluator.evaluate("NER", self.datadir, self.outfile_name)
 
 if __name__ == '__main__':
     baseline = BaselineNer()
