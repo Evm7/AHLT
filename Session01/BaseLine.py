@@ -34,12 +34,22 @@ class BaselineNer():
 
         self.suffixes = ["azole", "idine", "amine", "mycin", "xacin", "ostol", "adiol"]
         self.suffixes_drug = ["ine", "cin", "ium", "vir","ide", "lam", "il", "ril", "cin", "tin"]
-        self.suffixes_brand = ["gen"]
+        #self.suffixes_brand = ["gen"]
+        self.suffixes_brand = []
+
         self.suffixes_group = ["ines", "ides", "cins", "oles"]
 
-        self.prefixes_drug = ["bombe", "contor", "dmp", "egf", "ginse", "heo", "ibo", "jac", "phen"]
-        self.prefixes_brand = ["beta", "psycho", "cepha", "macro", "prot", "ace", "mao", "cardiac", "SPR", "acc", "equ"]
-        self.prefixes_group = ["beta-adre", "hmg", "monoamine", "calcium", "drugs", "sali", "quino", "ssri", "cepha", "sulfo", "TCA", "thiaz", "benzo", "barb", "contracept", "cortico", "digitalis", "diu"]
+        self.prefixes_drug_n = ['ibog', 'endo', "bombe", "contor", "dmp", "egf", "ginse", "heo", "ibo", "jac", "phen"]
+        #self.prefixes_brand = ["SPR", "Acc", "equ", "EQU"]
+        self.prefixes_brand = []
+
+        self.prefixes_group = ["beta-adre", "hmg", "monoamine", "calcium", "drugs", "sali", "quino", "ssri", "cepha", "sulfo", "TCA", "thiaz", "benzo", "barb", "contracept", "cortico", "digitalis", "diu", "central", "nervous", "system", "beta", "psycho", "cepha", "macro", "prot", "ace", "mao", "cardiac"]
+        self.prefixes_drug = ['digox', 'warfa', 'meth', 'theophy', 'lith', 'keto', 'cime', 'insu', 'fluox', 'alcoh', 'cyclos', 'eryth', 'carba', 'rifa', 'caffe']
+
+        self.contains_drug_n = ["MHD", "NaC", "MC", "gaine", "PTX", "PCP"]
+        self.contains_group = ["ids", "urea" ]
+        self.contains_brand = ["PEGA", "aspirin", "Aspirin", "XX", "IVA"]
+
 
         print("Starting the process of directory " + self.datadir + " saved in " + self.outfile_name)
 
@@ -104,7 +114,6 @@ class BaselineNer():
             tokens.append((w, offset, offset+len(w)-1))
             offset+=len(w)+1
 
-        print(tokens, flush=True)
         return tokens
 
     def extract_entities(self, tokens):
@@ -126,7 +135,7 @@ class BaselineNer():
         entities = []
 
         for tok in tokens:
-            isdrug, type = self.apply_rules(tok[0])
+            isdrug, type = self.apply_rules(tok[0], tok[1]==0)
             if isdrug:
                 entities.append(self.createMap(tok, type))
 
@@ -141,13 +150,27 @@ class BaselineNer():
                 return True
         return False
 
-    def apply_rules(self, token):
-        if token[-5:] in self.suffixes or token[-3:] in self.suffixes_drug or self.check_Prefixes(token, self.prefixes_drug) or token.lower() in self.drugbank_dict or token.lower() in self.HSDB:
+    def check_Suffixes(self, tok, pref):
+        for p in pref:
+            if str(tok).endswith(p):
+                return True
+        return False
+
+    def check_contains(self, tok, cont):
+        for p in cont:
+            if p in str(tok):
+                return True
+        return False
+
+    def apply_rules(self, token, starter=False):
+        if token[-5:] in self.suffixes or self.check_Suffixes(token, self.suffixes_drug) or token.lower() in self.drugbank_dict or token.lower() in self.HSDB or self.check_Prefixes(token, self.prefixes_drug):
             return True, "drug"
-        elif token.isupper() or token[-3:] in self.suffixes_brand or self.check_Prefixes(token, self.prefixes_brand):
-            return True, "brand"
-        elif token[-4:] in self.suffixes_group or "agent" in token or self.check_Prefixes(token, self.prefixes_group):
+        elif self.check_Suffixes(token,self.suffixes_group) or "agent" in token or self.check_Prefixes(token, self.prefixes_group) or self.check_contains(token, self.contains_group):
             return True, "group"
+        elif self.check_Prefixes(token, self.prefixes_drug_n) or self.check_contains(token, self.contains_drug_n) :
+            return True, "drug_n"
+        elif (not starter and token.isupper()) or self.check_Suffixes(token,self.suffixes_brand) or self.check_contains(token, self.contains_brand)  or self.check_Prefixes(token, self.prefixes_brand):
+            return True, "brand"
         else:
             return False, ""
 
@@ -161,7 +184,6 @@ class BaselineNer():
             for s in sentences:
                 sid = s.attributes["id"].value  # get sentence id
                 stext = s.attributes["text"].value  # get sentence text
-                print(stext)
                 # tokenize text
                 tokens = self.tokenize(stext)
                 # extract entities from tokenized sentence text
