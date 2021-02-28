@@ -1,3 +1,19 @@
+[28-02-2021] Improvement of Rules for the drug_n and group options - Drug_n name usually shorter than 10 chars, and group names usually larger than 8 chars, and ending in "s" char
+
+                   
+|                 |  tp  |  fp  |  fn  | #pred |  #exp |   P   |   R   |   F1  |
+|:----------------|:----:|:----:|:----:|:-----:|:-----:|:-----:|:-----:|:-----:|
+| -               |   -  |   -  |   -  |   -   |   -   |   -   |   -   |   -   |
+| brand           |  486 |  194 |  672 |   680 |  1158 | 71.5% | 42.0% | 52.9% |
+| drug            | 5822 | 1611 | 1434 |  7433 |  7256 | 78.3% | 80.2% | 79.3% |
+| drug_n          |  96  |  31  |  431 |  127  |  527  | 75.6% | 18.2% | 29.4% |
+| group           |  592 | 502  | 2094 |  1094 |  2686 | 54.1% | 22.0% | 31.3% |
+| -               |   -  |   -  |   -  |   -   |   -   |   -   |   -   |   -   |
+| M.avg           |   -  |   -  |   -  |   -   |   -   | 69.9% | 40.6% | 48.2% |
+| -               |   -  |   -  |   -  |   -   |   -   |   -   |   -   |   -   |
+| m.avg           | 6996 | 2338 | 4631 | 9334  | 11627 | 75.0% | 60.2% | 68.8% |
+| m.avg(no class) | 7267 | 2067 | 4360 | 9334  | 11627 | 77.9% | 62.5% | 69.3% |
+
 [26-02-2021] Improvement of Rules for the Brand option - Brand name usually larger than 6 chars, F1-Score is around 65%
 
                    
