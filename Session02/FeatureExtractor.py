@@ -33,11 +33,12 @@ class FeatureExtractor():
         print("Starting the process of directory " + self.datadir + " saved in " + self.outfile_name)
         self.extract_dict()
 
+
     def parse_arguments(self):
         # construct the argument parser
         parser = argparse.ArgumentParser()
-        parser.add_argument('-datadir', '--datadir', type=str, default="data/train/", help='Directory with XML files to process')
-        parser.add_argument('-outfile', '--outfile', type=str, default="train.feat", help='Name for the output file')
+        parser.add_argument('-datadir', '--datadir', type=str, default="data/devel/", help='Directory with XML files to process')
+        parser.add_argument('-outfile', '--outfile', type=str, default="devel_ext.feat", help='Name for the output file')
         parser.add_argument('--external', action="store_false", default=True, help='Whether to use external resources or not')
 
         args = vars(parser.parse_args())
@@ -128,9 +129,17 @@ class FeatureExtractor():
                 feature_vectors[i].append("capitalized")
             if (s[i][0] in set(stopwords.words('english'))) or (s[i][0] in string.punctuation):
                 feature_vectors[i].append("punct")
-
+            if self.external:
+                   if s[i][0].lower() in self.HSDB:
+                        feature_vectors[i].append('hsdb_drug')
+                   if s[i][0].lower() in self.drugbank_dict:
+                            feature_vectors[i].append('drug_bank_' + self.drugbank_dict[s[i][0].lower()])
         return feature_vectors
 
+    def seak_External(self, tok, map):
+        if tok in map:
+            return map[tok]
+        return None
 
     def get_tag(self, token ,gold):
         '''
