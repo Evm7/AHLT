@@ -23,6 +23,8 @@ class Learner():
 
         self.train_file = args["train"]
         self.val_file = args["val"]
+        self.test_file = args["test"]
+
         self.outfile_name = args["outfile"]
         self.external = args["external"]
         self.evaluator = args["evaluate"]
@@ -37,9 +39,11 @@ class Learner():
         parser = argparse.ArgumentParser()
         parser.add_argument('-train', '--train', type=str, default="train.feat", help='Name for the training feature file')
         parser.add_argument('-val', '--val', type=str, default="devel.feat", help='Name for the validation feature file')
+        parser.add_argument('-test', '--test', type=str, default="test.feat", help='Name for the validation feature file')
+
         parser.add_argument('-outfile', '--outfile', type=str, default="results.out", help='Name for the output file')
         parser.add_argument('--external', action="store_false", default=True, help='Whether to use external resources or not')
-        parser.add_argument('-evaluate', '--evaluate', type=str, default="train", help='Evaluating over the testing dataset')
+        parser.add_argument('-evaluate', '--evaluate', type=str, default="test", help='Evaluating over the testing dataset')
 
 
         args = vars(parser.parse_args())
@@ -139,13 +143,18 @@ class Learner():
 
     def createDataset(self):
         self.train_sents = self.readFile(self.train_file)
-        self.test_sents = self.readFile(self.val_file)
+        self.val_sents = self.readFile(self.val_file)
+        self.test_sents = self.readFile(self.test_file)
+
+
         self.X_train = [self.sent2features(s) for s in self.train_sents]
         self.y_train = [self.sent2labels(s) for s in self.train_sents]
 
+        self.X_val = [self.sent2features(s) for s in self.val_sents]
+        self.y_val = [self.sent2labels(s) for s in self.val_sents]
+
         self.X_test = [self.sent2features(s) for s in self.test_sents]
         self.y_test = [self.sent2labels(s) for s in self.test_sents]
-
 
 
     def train(self):
@@ -175,16 +184,16 @@ class Learner():
         tagger = pycrfsuite.Tagger()
         tagger.open('pycrfsuite_15_03_2021')
         self.createDataset()
-        if self.evaluator is "test":
-            print("Evaluating the classifier over the testing dataset")
-            y_pred = [tagger.tag(xseq) for xseq in self.X_test]
-            #print(self.bio_classification_report(self.y_test, y_pred))
+        if self.evaluator is "val":
+            print("Evaluating the classifier over the validation dataset")
+            y_pred = [tagger.tag(xseq) for xseq in self.X_val]
+            #print(self.bio_classification_report(self.y_val, y_pred))
             #self.checkKnoweledge(tagger)
-            self.output_results(y_pred, self.test_sents)
+            self.output_results(y_pred, self.val_sents)
             self.f.close()
             # print performance score
             evaluator.evaluate("NER", "../data/devel", self.outfile_name)
-        else:
+        elif self.evaluator is "train":
             print("Evaluating the classifier over the training dataset")
             y_pred = [tagger.tag(xseq) for xseq in self.X_train]
             #print(self.bio_classification_report(self.y_train, y_pred))
@@ -193,6 +202,16 @@ class Learner():
             self.f.close()
             # print performance score
             evaluator.evaluate("NER", "../data/train", self.outfile_name)
+
+        else:
+            print("Evaluating the classifier over the testing dataset")
+            y_pred = [tagger.tag(xseq) for xseq in self.X_test]
+            #print(self.bio_classification_report(self.y_train, y_pred))
+            #self.checkKnoweledge(tagger)
+            self.output_results(y_pred, self.test_sents)
+            self.f.close()
+            # print performance score
+            evaluator.evaluate("NER", "../data/test", self.outfile_name)
 
     def output_results(self, y_pred, sentences_file):
         self.tokens = [self.sent2tokens(s) for s in sentences_file]
