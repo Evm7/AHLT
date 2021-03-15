@@ -39,7 +39,7 @@ class Learner():
         parser.add_argument('-val', '--val', type=str, default="devel.feat", help='Name for the validation feature file')
         parser.add_argument('-outfile', '--outfile', type=str, default="results.out", help='Name for the output file')
         parser.add_argument('--external', action="store_false", default=True, help='Whether to use external resources or not')
-        parser.add_argument('-evaluate', '--evaluate', type=str, default="test", help='Evaluating over the testing dataset')
+        parser.add_argument('-evaluate', '--evaluate', type=str, default="train", help='Evaluating over the testing dataset')
 
 
         args = vars(parser.parse_args())
@@ -139,7 +139,7 @@ class Learner():
 
     def createDataset(self):
         self.train_sents = self.readFile(self.train_file)
-        self.test_sents = self.readFile(self.train_file)
+        self.test_sents = self.readFile(self.val_file)
         self.X_train = [self.sent2features(s) for s in self.train_sents]
         self.y_train = [self.sent2labels(s) for s in self.train_sents]
 
@@ -160,46 +160,50 @@ class Learner():
             'c2': 1e-3,  # coefficient for L2 penalty
             # as we have a considerable quantity of features to train from
             # the training should be longer
-            'max_iterations': 200,
+            'max_iterations': 50,
             # include transitions that are possible, but not observed
             'feature.possible_transitions': True
         })
-
-        trainer.train('pycrfsuite_10_03')
+        from datetime import date
+        today = date.today()
+        # dd/mm/YY
+        d1 = today.strftime("%d_%m_%Y")
+        trainer.train('pycrfsuite_'+str(d1))
 
     def classify(self):
         # MAKE PREDICTIONS
         tagger = pycrfsuite.Tagger()
-        tagger.open('pycrfsuite_10_03')
+        tagger.open('pycrfsuite_15_03_2021')
         self.createDataset()
         if self.evaluator is "test":
             print("Evaluating the classifier over the testing dataset")
             y_pred = [tagger.tag(xseq) for xseq in self.X_test]
             #print(self.bio_classification_report(self.y_test, y_pred))
             #self.checkKnoweledge(tagger)
-            self.output_results(y_pred)
+            self.output_results(y_pred, self.test_sents)
             self.f.close()
             # print performance score
-            evaluator.evaluate("NER", "../data/test", self.outfile_name)
+            evaluator.evaluate("NER", "../data/devel", self.outfile_name)
         else:
             print("Evaluating the classifier over the training dataset")
             y_pred = [tagger.tag(xseq) for xseq in self.X_train]
             #print(self.bio_classification_report(self.y_train, y_pred))
             #self.checkKnoweledge(tagger)
-            self.output_results(y_pred)
+            self.output_results(y_pred, self.train_sents)
             self.f.close()
             # print performance score
-            evaluator.evaluate("NER", "../data/train", self.f)
+            evaluator.evaluate("NER", "../data/train", self.outfile_name)
 
-    def output_results(self, y_pred):
-        self.tokens = [self.sent2tokens(s) for s in self.test_sents]
+    def output_results(self, y_pred, sentences_file):
+        self.tokens = [self.sent2tokens(s) for s in sentences_file]
         for index, pred in enumerate(y_pred):
             if len(pred)>0:
                 tag = pred[0]
                 if 'O' not in tag:
                     tag = tag.split("-")[1]
-                    e = self.createMap(self.tokens[index][0], tag)
-                    print(e["id"] + "|" + e["offset"] + "|" + e["name"] + "|" + e["type"], file=self.f)
+                    if len(self.tokens[index])>0:
+                        e = self.createMap(self.tokens[index][0], tag)
+                        print(e["id"] + "|" + e["offset"] + "|" + e["name"] + "|" + e["type"], file=self.f)
 
     def createMap(self, token, type):
         return {'id': token[0], 'name': token[1], 'offset': str(token[2])+"-" +str(token[3]), 'type': type}
