@@ -1,8 +1,8 @@
 [18-03-2021] Feature extraction improvements, and max_iterations number increased to 300
 Evaluating the classifier over the testing dataset
 
-m.avg           | 2322 | 1241   |  857   | 3563  |  3179  |  65.2% |  73.0%  | 68.9%
-m.avg(no class) | 2402 |  1161   |  777   | 3563  |  3179  |  67.4%  | 75.6%  | 71.3%
+|m.avg           | 2322 | 1241   |  857   | 3563  |  3179  |  65.2% |  73.0%  | 68.9%|
+|m.avg(no class) | 2402 |  1161   |  777   | 3563  |  3179  |  67.4%  | 75.6%  | 71.3%|
 
 
 [15-03-2021] First Evaluation with Simple features
