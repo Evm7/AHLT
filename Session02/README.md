@@ -1,3 +1,18 @@
+[18-03-2021] Feature extraction improvements, and max_iterations number increased to 300
+Evaluating the classifier over the testing dataset
+                   tp     fp      fn    #pred   #exp    P       R       F1
+------------------------------------------------------------------------------
+brand             266     85      22     351     288    75.8%   92.4%   83.3%
+drug             1715    363     405    2078    2120    82.5%   80.9%   81.7%
+drug_n              1     11      71      12      72    8.3%    1.4%    2.4%
+group             340    782     359    1122     699    30.3%   48.6%   37.3%
+------------------------------------------------------------------------------
+M.avg            -      -       -       -       -       49.2%   55.8%   51.2%
+------------------------------------------------------------------------------
+m.avg            2322   1241     857    3563    3179    65.2%   73.0%   68.9%
+m.avg(no class)  2402   1161     777    3563    3179    67.4%   75.6%   71.3%
+
+
 [15-03-2021] First Evaluation with Simple features
 Evaluating the classifier over the validation dataset
 |                 | tp   |  fp  |  fn  | #pred | #exp |   P   |   R   |   F1  |
