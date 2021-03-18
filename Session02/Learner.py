@@ -169,7 +169,7 @@ class Learner():
             'c2': 1e-3,  # coefficient for L2 penalty
             # as we have a considerable quantity of features to train from
             # the training should be longer
-            'max_iterations': 50,
+            'max_iterations': 300,
             # include transitions that are possible, but not observed
             'feature.possible_transitions': True
         })
