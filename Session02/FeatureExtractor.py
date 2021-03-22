@@ -96,26 +96,6 @@ class FeatureExtractor():
 
 
     def extract_features(self, s):
-        #TODO Add more conditions to extract better features
-        '''
-        Task :
-        Given a tokenized sentence , return a feature vector for each token
-        Input :
-        s: A tokenized sentence ( list of triples (word , offsetFrom , offsetTo ) )
-        Output :
-        A list of feature vectors , one per token .
-        Features are binary and vectors are in sparse representation (i.e. only active features are listed )
-        Example :
-        extract_features ([(" Ascorbic " ,0 ,7) , (" acid " ,9 ,12) , (" ," ,13 ,13) ,
-        (" aspirin " ,15 ,21) , (" ," ,22 ,22) , (" and " ,24 ,26) , (" the " ,28 ,30) ,
-        (" common " ,32 ,37) , (" cold " ,39 ,42) , ("." ,43 ,43) ])
-        [ [ " form = Ascorbic " , " suf4 = rbic ", " next = acid ", " prev = _BoS_ " , "capitalized" ],
-        [ " form = acid ", " suf4 = acid " , " next = ," , " prev = Ascorbic " ] ,
-        [ " form = ," , " suf4 = ," , " next = aspirin ", " prev = acid ", " punct " ],
-        [ " form = aspirin " , " suf4 = irin ", " next = ," , " prev = ," ],
-        ...
-        ]
-        '''
         prev = "_BoS_"
         feature_vectors = []
         for i in range(len(s)):
@@ -123,7 +103,7 @@ class FeatureExtractor():
                 next = "_EoS_"
             else:
                 next = s[i+1][0]
-            feature_vectors.append(["form = " + s[i][0], "suf3 = " + s[i][0][-3:], "pref3 = " + s[i][0][:3], "next = " + next, "prev = " + prev])
+            feature_vectors.append(["form = " + s[i][0], "suf3 = " + s[i][0][-3:], "pref3 = " + s[i][0][:3], "next = " + next, "prev = " + prev, "length = "+str(len(s[i][0]))])
             prev = s[i][0]
             if s[i][0].isupper():
                 feature_vectors[i].append("All_Caps")
@@ -131,10 +111,7 @@ class FeatureExtractor():
                 feature_vectors[i].append("capitalized")
             if (s[i][0] in set(stopwords.words('english'))) or (s[i][0] in string.punctuation):
                 feature_vectors[i].append("punct")
-            if len(s[i][0]) > 10:
-                feature_vectors[i].append("Over10Chars")
-            if len(s[i][0]) < 5:
-                feature_vectors[i].append("Under5Chars")
+            
             for char in s[i][0]:
                 if char.isdigit():
                     feature_vectors[i].append("ContainsNumber")
@@ -147,17 +124,15 @@ class FeatureExtractor():
                 if char=="/":
                     feature_vectors[i].append("ContainsSlash")
                     break
+
             if self.external:
-                   if s[i][0].lower() in self.HSDB:
-                        feature_vectors[i].append('hsdb_drug')
+                   if s[i][0].lower() in self.HSDB:                        
+                            feature_vectors[i].append('hsdb_drug')
                    if s[i][0].lower() in self.drugbank_dict:
                             feature_vectors[i].append('drug_bank_' + self.drugbank_dict[s[i][0].lower()])
-                   elif s[i][0].upper() in self.drugbank_dict:
-                            feature_vectors[i].append('drug_bank_' + self.drugbank_dict[s[i][0].upper()])
                    elif s[i][0] in self.drugbank_dict:
                             feature_vectors[i].append('drug_bank_' + self.drugbank_dict[s[i][0]])
             
-
         return feature_vectors
 
     def seak_External(self, tok, map):

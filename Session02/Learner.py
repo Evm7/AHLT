@@ -169,7 +169,7 @@ class Learner():
             'c2': 1e-3,  # coefficient for L2 penalty
             # as we have a considerable quantity of features to train from
             # the training should be longer
-            'max_iterations': 300,
+            'max_iterations': 50,
             # include transitions that are possible, but not observed
             'feature.possible_transitions': True
         })
@@ -182,7 +182,11 @@ class Learner():
     def classify(self):
         # MAKE PREDICTIONS
         tagger = pycrfsuite.Tagger()
-        tagger.open('pycrfsuite_15_03_2021')
+        from datetime import date
+        today = date.today()
+        # dd/mm/YY
+        d1 = today.strftime("%d_%m_%Y")
+        tagger.open('pycrfsuite_'+str(d1))
         self.createDataset()
         if self.evaluator is "val":
             print("Evaluating the classifier over the validation dataset")
@@ -313,5 +317,5 @@ class Learner():
 
 if __name__ == '__main__':
     learner = Learner()
-    #learner.train()
+    learner.train()
     learner.classify()

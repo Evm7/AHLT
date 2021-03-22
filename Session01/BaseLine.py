@@ -84,6 +84,7 @@ class BaselineNer():
             for d in document:
                 self.HSDB.append(d.rstrip().lower())
 
+
     def tokenize(self, sentence):
         '''
         Task :
@@ -161,22 +162,14 @@ class BaselineNer():
                 return True
         return False
 
-    def seak_External(self, tok, map):
-        if tok in map:
-            return map[tok]
-        return None
-
     def apply_rules(self, token, starter=False):
-        a = self.seak_External(token.lower(), self.drugbank_dict)
-        if a is not None:
-            return True, a
-        elif token[-5:] in self.suffixes or self.check_Suffixes(token, self.suffixes_drug) or token.lower() in self.HSDB or self.check_Prefixes(token, self.prefixes_drug):
+        if token[-5:] in self.suffixes or self.check_Suffixes(token, self.suffixes_drug) or self.check_Prefixes(token, self.prefixes_drug):
             return True, "drug"
-        elif self.check_Suffixes(token,self.suffixes_group) and len(token)>10 or "agent" in token or self.check_Prefixes(token, self.prefixes_group) and str(token).endswith("s") and len(token)>8 or self.check_contains(token, self.contains_group):
+        elif self.check_Suffixes(token,self.suffixes_group) or "agent" in token or self.check_Prefixes(token, self.prefixes_group) or self.check_contains(token, self.contains_group):
             return True, "group"
-        elif self.check_Prefixes(token, self.prefixes_drug_n) and len(token)<10 or self.check_contains(token, self.contains_drug_n) :
+        elif self.check_Prefixes(token, self.prefixes_drug_n) or self.check_contains(token, self.contains_drug_n) :
             return True, "drug_n"
-        elif (not starter and token.isupper() and len(token)>6) or self.check_Suffixes(token,self.suffixes_brand) or self.check_contains(token, self.contains_brand)  or self.check_Prefixes(token, self.prefixes_brand):
+        elif (not starter and token.isupper()) or self.check_Suffixes(token,self.suffixes_brand) or self.check_contains(token, self.contains_brand)  or self.check_Prefixes(token, self.prefixes_brand):
             return True, "brand"
         else:
             return False, ""
