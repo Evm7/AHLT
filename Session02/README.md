@@ -1,3 +1,18 @@
+[22-03-2021] Feature extraction improvements, and max_iterations number decreased to 50 (gave better results)
+Evaluating the classifier over the testing dataset
+| tp              | fp   | fn   | #pred | #exp | P    | R     | F1    |       |
+|-----------------|------|------|-------|------|------|-------|-------|-------|
+| -               | -    | -    | -     | -    | -    | -     | -     | -     |
+| brand           | 254  | 50   | 34    | 304  | 288  | 83.6% | 88.2% | 85.8% |
+| drug            | 1713 | 343  | 407   | 2056 | 2120 | 83.3% | 80.8% | 82.0% |
+| drug_n          | 2    | 13   | 70    | 15   | 72   | 13.3% | 2.8%  | 4.6%  |
+| group           | 340  | 752  | 359   | 1092 | 699  | 31.1% | 48.6% | 38.0% |
+| -                | -    | -    | -     | -    | -    | -     | -     | -     |
+| M.avg           | -    | -    | -     | -    | -    | 52.8% | 55.1% | 52.6% |
+|                 | -    | -    | -     | -    | -    | -     | -     | -     |
+| m.avg           | 2309 | 1158 | 870   | 3467 | 3179 | 66.6% | 72.6% | 69.5% |
+| m.avg(no class) | 2383 | 1084 | 796   | 3467 | 3179 | 68.7% | 75.0% | 71.7% |
+
 [18-03-2021] Feature extraction improvements, and max_iterations number increased to 300
 Evaluating the classifier over the testing dataset
 |                 | tp   |  fp  |  fn  | #pred | #exp |   P   |   R   |   F1  |
