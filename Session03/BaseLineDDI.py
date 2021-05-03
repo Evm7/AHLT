@@ -49,7 +49,7 @@ class BaselineDDI():
     def parse_arguments(self):
         # construct the argument parser
         parser = argparse.ArgumentParser()
-        parser.add_argument('-datadir', '--datadir', type=str, default="../data/train/", help='Directory with XML files to process')
+        parser.add_argument('-datadir', '--datadir', type=str, default="../data/devel/", help='Directory with XML files to process')
         parser.add_argument('-outfile', '--outfile', type=str, default="result.out", help='Name for the output file')
         parser.add_argument('--external', action="store_false", default=True, help='Whether to use external resources or not')
 
@@ -134,35 +134,20 @@ class BaselineDDI():
         # Entities under same parent
         if self.sameNode(parent1, parent2):
             tag = parent1['tag'].lower()[0]
-            if tag not in ['v', 'n']:
+            if tag != 'v':
                 return (0, "null")
-            if tag == 'v':
-                return (1, "advise")
+            return (1, "advise")
 
         self.responses1 = {}
-        self.responses1["effect"] = ['response', 'diminish', 'enhance']
-        self.responses1["mechanism"] = ['concentration', 'concentrations', 'absorption', 'metabolism', 'presence']
+        self.responses1["effect"] = ['response', 'diminish', 'enhance', 'effect']
+        self.responses1["mechanism"] = ['concentration', 'concentrations', 'absorption', 'metabolism', 'presence', 'administration']
         self.responses1["int"] =['interact', 'interaction']
-        self.responses1["advise"] = ['take', 'adjustment', 'avoid', 'recommend', 'contraindicate']
+        self.responses1["advise"] = ['take','administer', 'bind', 'adjustment', 'avoid', 'recommend', 'contraindicate']
 
         self.responses2 = {}
-        self.responses2["effect"] = ['effect']
+        self.responses2["effect"] = ['effect', 'steroid', 'response', 'acetaminophen']
         self.responses2["mechanism"] = ['concentration','concentrations', 'absorption', 'metabolism', 'level', 'clearance']
         self.responses2["advise"] = ['take', 'caution']
-
-        '''
-        self.responses1 = {}
-        self.responses1["effect"] = ['response', 'diminish', 'enhance']
-        self.responses1["mechanism"] = ['absorption', 'metabolism', 'presence']
-        self.responses1["int"] =['interact', 'interaction']
-        self.responses1["advise"] = ['take', 'adjustment', 'avoid', 'recommend', 'contraindicate']
-
-        self.responses2 = {}
-        self.responses2["effect"] = ['effect']
-        self.responses2["mechanism"] = ['absorption', 'metabolism', 'level', 'clearance']
-        self.responses2["advise"] = ['take', 'caution']'''
-
-
 
         for classes_, lemmas in self.responses1.items():
             if parent1["lemma"] in lemmas:
