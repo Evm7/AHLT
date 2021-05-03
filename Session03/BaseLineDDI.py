@@ -211,8 +211,6 @@ class BaselineDDI():
         return node1['address'] == node2['address']
 
     def process_directory(self):
-        self.saver = {}
-        self.saver["DDI_Drugs"] =[]
         # process each file in directory
         length = len(listdir(self.datadir))
         for i, f in enumerate(listdir(self.datadir)):
