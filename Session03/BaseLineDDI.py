@@ -43,7 +43,6 @@ class BaselineDDI():
                            "changes", "changed", "elevate", "elevates", "elevated", "interfere", "interferes",
                            "interfered"]
         self.int_clues = ["interaction", "intereact"]
-        self.id_parents_lemma = {}
 
         print("[INFO] Starting...", flush=True)
 
@@ -118,11 +117,9 @@ class BaselineDDI():
         nodes = analysis.nodes
         # Get entities
         entity1, entity2 = self.getNodes(nodes, entities, e1, e2)
-        self.id_parents_lemma[self.id_pairs] = {}
-        self.id_parents_lemma[self.id_pairs]["error"]= False
+
         # If entities can not be retrieved, no DDI
         if len(entity1) < 1 or len(entity2)< 1:
-            self.id_parents_lemma[self.id_pairs]["error"] = True
             return (0, "null")
 
         # Get parent Nodes of each entity
@@ -130,21 +127,13 @@ class BaselineDDI():
         parent2, rel2 = self.getParentNode(nodes, entity2)
 
 
-        self.id_parents_lemma[self.id_pairs]["parent1"] = parent1["lemma"]
-        self.id_parents_lemma[self.id_pairs]["parent2"] = parent2["lemma"]
-        self.id_parents_lemma[self.id_pairs]["is_under"] = False
-        self.id_parents_lemma[self.id_pairs]["tag"] = "None"
-
         # If entity1 is under entity2, then no DDI
         if self.is_under(entity1, entity2):
-            self.id_parents_lemma[self.id_pairs]["is_under"] = True
             return (0, "null")
 
         # Entities under same parent
         if self.sameNode(parent1, parent2):
             tag = parent1['tag'].lower()[0]
-            self.id_parents_lemma[self.id_pairs]["tag"] = tag
-
             if tag not in ['v', 'n']:
                 return (0, "null")
             if tag == 'v':
@@ -284,15 +273,7 @@ class BaselineDDI():
                     id_e1 = p.attributes["e1"].value
                     id_e2 = p.attributes["e2"].value
 
-                    self.id_pairs = p.attributes["id"].value
-                    ddi = p.attributes['ddi'].value
-                    if ddi == "true":
-                        ddi_type = p.attributes['type'].value
-                        if ddi_type is None:
-                            ddi_type = 'null'
-
                     find, ddi_type = self.check_interaction(analysis, entities, id_e1, id_e2)
-                    self.id_parents_lemma[self.id_pairs]["type"] = ddi_type
 
                     if find:
                         print(sid + "|" + id_e1 + "|" + id_e2 + "|" + ddi_type, file = self.f)
@@ -302,10 +283,7 @@ class BaselineDDI():
                 print("[INFO] "+ str(int(i/length*100))+"% complete.", flush=True)
 
         self.f.close()
-        import json
-        with open("clues.json", 'w') as outfile:
-            json.dump(self.id_parents_lemma, outfile)
-            outfile.close()
+
         # get performance score
         evaluator.evaluate("DDI", self.datadir, self.outfile_name)
 
