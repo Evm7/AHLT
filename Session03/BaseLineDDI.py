@@ -33,23 +33,12 @@ class BaselineDDI():
 
         # connect to your CoreNLP server (just once)
         self.my_parser = CoreNLPDependencyParser(url="http://localhost:9000")
-
-        self.advise_pos = ["MD"]
-        self.interest_pos = ["NN", "VBZ", "VBN", "VBD", "VB", "MD", "RB", "VBP"]
-        self.advise_clues = ["should", "may", "could", "would"]
-        self.effect_clues = ["administered", "concurrently", "concomitantly", "increase", "increases", "increased", "effect",
-                        "effects", "prevent", "prevents", "prevented", "potentiate", "potentiates", "potentiated", "administer"]
-        self.mechanism_clues = ["inhibit", "reduce", "reduces", "reduced", "decrease", "decreases", "decreased", "change",
-                           "changes", "changed", "elevate", "elevates", "elevated", "interfere", "interferes",
-                           "interfered"]
-        self.int_clues = ["interaction", "intereact"]
-
         print("[INFO] Starting...", flush=True)
 
     def parse_arguments(self):
         # construct the argument parser
         parser = argparse.ArgumentParser()
-        parser.add_argument('-datadir', '--datadir', type=str, default="../data/devel/", help='Directory with XML files to process')
+        parser.add_argument('-datadir', '--datadir', type=str, default="../data/test/", help='Directory with XML files to process')
         parser.add_argument('-outfile', '--outfile', type=str, default="result.out", help='Name for the output file')
         parser.add_argument('--external', action="store_false", default=True, help='Whether to use external resources or not')
 
@@ -274,5 +263,4 @@ class BaselineDDI():
 
 if __name__ == '__main__':
     baseline = BaselineDDI()
-    #print(baseline.analyze("However, halothane anesthetic requirement (i.e., MAC) was depressed in a dose-dependent fashion as much as 56% 1-2 hours and as much as 14% 5-6 hours after injection of ketamine, 50 mg/kg, im. "))
     baseline.process_directory()
