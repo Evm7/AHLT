@@ -120,12 +120,28 @@ class BaselineDDI():
         if self.is_under(entity1, entity2):
             return (0, "null")
 
+        # e1 under certain verbs
+        if parent1['tag'] is 'v' or 'V':
+            if (parent1['lemma'] == 'enhance' or parent1['lemma'] == 'reduce'):
+                return (1, "effect")
+            elif (parent1['lemma'] == 'administer'):
+                return (1, "advise")
+
         # Entities under same parent
         if self.sameNode(parent1, parent2):
             tag = parent1['tag'].lower()[0]
             if tag != 'v':
                 return (0, "null")
             return (1, "advise")
+
+        # if words 'acid' or 'drugs' between e1 and e2 --> null
+        word = "..."
+        for w in nodes:
+            if not ";" in entities.get(e1)[1] and not ";" in entities.get(e2)[0] and None != analysis.get_by_address(w)['word']:
+                if int(analysis.get_by_address(w)['start']) > int(entities.get(e1)[1]) and int(analysis.get_by_address(w)['start']) < int(entities.get(e2)[0]):
+                    word = analysis.get_by_address(w)['word']
+                if word == "acid" or word == "drugs":
+                    return (0, "null")
 
         self.responses1 = {}
         self.responses1["effect"] = ['response', 'diminish', 'enhance', 'effect']
@@ -145,6 +161,15 @@ class BaselineDDI():
         for classes_, lemmas in self.responses2.items():
             if parent2["lemma"] in lemmas:
                 return (1, classes_)
+
+        # if certain words between e1 and e2 --> effect
+        for w in nodes:
+            if not ";" in entities.get(e1)[1] and not ";" in entities.get(e2)[0] and None != analysis.get_by_address(w)['word']:
+                if int(analysis.get_by_address(w)['start']) > int(entities.get(e1)[1]) and int(analysis.get_by_address(w)['start']) < int(entities.get(e2)[0]):
+                    word = analysis.get_by_address(w)['word']
+                if word == "administer" or word == "potentiate" or word == "prevent" or word == "may" or word == "effects" or word == "response" or word == "certain" or word == "include":
+                    return (1, "effect")
+        
         return (0, "null")
 
 
