@@ -4,6 +4,7 @@ import sys
 from os import listdir
 
 import nltk
+
 nltk.download('stopwords')
 
 sys.path.append("../")
@@ -13,6 +14,7 @@ import evaluator
 from xml.dom.minidom import parse
 
 import argparse
+
 
 class BaselineDDI():
     def __init__(self):
@@ -38,13 +40,14 @@ class BaselineDDI():
     def parse_arguments(self):
         # construct the argument parser
         parser = argparse.ArgumentParser()
-        parser.add_argument('-datadir', '--datadir', type=str, default="../data/test/", help='Directory with XML files to process')
+        parser.add_argument('-datadir', '--datadir', type=str, default="../data/test/",
+                            help='Directory with XML files to process')
         parser.add_argument('-outfile', '--outfile', type=str, default="result.out", help='Name for the output file')
-        parser.add_argument('--external', action="store_false", default=True, help='Whether to use external resources or not')
+        parser.add_argument('--external', action="store_false", default=True,
+                            help='Whether to use external resources or not')
 
         args = vars(parser.parse_args())
         return args
-
 
     def analyze(self, s):
         '''
@@ -90,7 +93,6 @@ class BaselineDDI():
             i += 1
         return mytree
 
-
     def check_interaction(self, analysis, entities, e1, e2):
         '''
         Task :
@@ -108,13 +110,12 @@ class BaselineDDI():
         entity1, entity2 = self.getNodes(nodes, entities, e1, e2)
 
         # If entities can not be retrieved, no DDI
-        if len(entity1) < 1 or len(entity2)< 1:
+        if len(entity1) < 1 or len(entity2) < 1:
             return (0, "null")
 
         # Get parent Nodes of each entity
         parent1, rel1 = self.getParentNode(nodes, entity1)
         parent2, rel2 = self.getParentNode(nodes, entity2)
-
 
         # If entity1 is under entity2, then no DDI
         if self.is_under(entity1, entity2):
@@ -134,26 +135,26 @@ class BaselineDDI():
                 return (0, "null")
             return (1, "advise")
 
-        # if words 'acid' or 'drugs' between e1 and e2 --> null
-        word = "..."
-        for w in nodes:
-            if not ";" in entities.get(e1)[1] and not ";" in entities.get(e2)[0] and None != analysis.get_by_address(w)['word']:
-                if int(analysis.get_by_address(w)['start']) > int(entities.get(e1)[1]) and int(analysis.get_by_address(w)['start']) < int(entities.get(e2)[0]):
-                    word = analysis.get_by_address(w)['word']
-                if word == "acid" or word == "drugs":
-                    return (0, "null")
 
         self.responses1 = {}
         self.responses1["effect"] = ['response', 'diminish', 'enhance', 'effect']
         self.responses1["mechanism"] = ['concentration', 'concentrations', 'absorption', 'metabolism', 'presence', 'administration']
-        self.responses1["int"] =['interact', 'interaction']
-        self.responses1["advise"] = ['take','administer', 'bind', 'adjustment', 'avoid', 'recommend', 'contraindicate']
+        self.responses1["int"] = ['interact', 'interaction']
+        self.responses1["advise"] = ['take', 'administer', 'bind', 'adjustment', 'avoid', 'recommend', 'contraindicate']
 
         self.responses2 = {}
         self.responses2["effect"] = ['effect', 'steroid', 'response', 'acetaminophen']
-        self.responses2["mechanism"] = ['concentration','concentrations', 'absorption', 'metabolism', 'level', 'clearance']
+        self.responses2["mechanism"] = ['concentration', 'concentrations', 'absorption', 'metabolism', 'level', 'clearance']
         self.responses2["advise"] = ['take', 'caution']
+        
+        self.effect_between = ["administer", "potentiate", "prevent", "may", "effects", "response", "certain", "include"]
+        self.null_between = ["acid", "drugs"]
 
+
+        # if words 'acid' or 'drugs' between e1 and e2 --> null
+        if self.words_inbetweens(analysis, e1,e2, entities, self.null_between):
+            return (0, "null")
+                
         for classes_, lemmas in self.responses1.items():
             if parent1["lemma"] in lemmas:
                 return (1, classes_)
@@ -163,16 +164,26 @@ class BaselineDDI():
                 return (1, classes_)
 
         # if certain words between e1 and e2 --> effect
+        if self.words_inbetweens(analysis, e1,e2, entities, self.effect_between):
+            return (1, "effect")
+
+        return (0, "null")
+    
+    def words_inbetweens(self, analysis, e1,e2, entities, words):
+        '''
+        Check if certain words are placed inbetween our entities. Return True if they are. 
+        '''
+        word = "..."
+        nodes = analysis.nodes
         for w in nodes:
             if not ";" in entities.get(e1)[1] and not ";" in entities.get(e2)[0] and None != analysis.get_by_address(w)['word']:
-                if int(analysis.get_by_address(w)['start']) > int(entities.get(e1)[1]) and int(analysis.get_by_address(w)['start']) < int(entities.get(e2)[0]):
+                if int(analysis.get_by_address(w)['start']) > int(entities.get(e1)[1]) and int(
+                        analysis.get_by_address(w)['start']) < int(entities.get(e2)[0]):
                     word = analysis.get_by_address(w)['word']
-                if word == "administer" or word == "potentiate" or word == "prevent" or word == "may" or word == "effects" or word == "response" or word == "certain" or word == "include":
-                    return (1, "effect")
-        
-        return (0, "null")
-
-
+                if word in words:
+                    return True 
+        return False
+    
     def check_inbetweens(self, start_e, end_e, start_k, end_k):
         '''
         Check whether an entity, defined by [start_e, end_e] is inside a given node [start_k, end_k]
@@ -181,7 +192,8 @@ class BaselineDDI():
         '''
         ranger_tree = range(int(start_k), int(end_k) + 1)
         ranger_entity = range(int(start_e), int(end_e) + 1)
-        return (int(start_e) in ranger_tree or int(end_e) in ranger_tree) or (start_k in ranger_entity and end_k in ranger_entity)
+        return (int(start_e) in ranger_tree or int(end_e) in ranger_tree) or (
+                    start_k in ranger_entity and end_k in ranger_entity)
 
     def getNodes(self, tree, entities, e1, e2):
         """
@@ -263,7 +275,6 @@ class BaselineDDI():
                     stext = stext.replace("%", "p")
                     analysis = self.analyze(stext)
 
-
                 # for each pair in the sentence , decide whether it is DDI and its type
                 pairs = s.getElementsByTagName("pair")
                 for p in pairs:
@@ -273,16 +284,16 @@ class BaselineDDI():
                     find, ddi_type = self.check_interaction(analysis, entities, id_e1, id_e2)
 
                     if find:
-                        print(sid + "|" + id_e1 + "|" + id_e2 + "|" + ddi_type, file = self.f)
+                        print(sid + "|" + id_e1 + "|" + id_e2 + "|" + ddi_type, file=self.f)
 
-
-            if not (i % int(length/10)):
-                print("[INFO] "+ str(int(i/length*100))+"% complete.", flush=True)
+            if not (i % int(length / 10)):
+                print("[INFO] " + str(int(i / length * 100)) + "% complete.", flush=True)
 
         self.f.close()
 
         # get performance score
         evaluator.evaluate("DDI", self.datadir, self.outfile_name)
+
 
 if __name__ == '__main__':
     baseline = BaselineDDI()
