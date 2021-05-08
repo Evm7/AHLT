@@ -1,1 +1,12 @@
 In this session we are providing DDI results by the analysis and training with Machine Learning Models
+  - Feature Extractor Def is a python Script which allows to extract all the features from the annotated pairs in the .xml files from the DDI dataset.
+  - Trainer.py is a file which, given a structured organization that will be mentioned afterwards, train, predicts and evaluate a big number of hyperparameters to allow the optimization of the features.
+      - Structure:
+        -Trainer.py
+        -outputs/
+          - Automatically we create a directory for each Model trained, with the model weights, the predictions over the features files and the evaluation of them.
+        -features/
+          - train_features.txt
+          - devel_features.txt
+          - test_features.txt
+        - models/megam_i686.opt --> file which has the model.opt extracted from [http://users.umiacs.umd.edu/~hal/megam/version0_91/](here)
