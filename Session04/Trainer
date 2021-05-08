@@ -1,0 +1,194 @@
+import sys
+import os
+sys.path.append("../")
+import itertools
+
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
+
+from datetime import datetime
+
+
+class Trainer():
+    def __init__(self):
+
+        self.train_file = "outputs/train_features"
+        self.val_file = "outputs/devel_features"
+        self.test_file = "outputs/test_features"
+
+        self.outfile_name = "model/model_trained.dat"
+
+        self.megamFile = "models/megam_i686.opt"
+
+        print("Starting to train a learner saved in " + self.outfile_name)
+
+
+    def defineParameters(self):
+        '''
+
+        - maxi <int> :specify the maximum number of iterations (default: 100)
+        - lambda <float>: specify the precision of the Gaussian prior for maxent; or the value for C for passive-aggressive algorithms (default: 1)
+        - tune: tune lambda using repeated optimizations (starts with specified -lambda value and drops by half each time until optimal dev error rate is achieved)
+        - norm1: l1 normalization on instances
+        - norm2: l2 normalization on instances
+        - minfc <int>: remove all features with frequency <= <int>
+        - nobias: do not use the bias features
+        - repeat <int>: repeat optimization <int> times
+        - quite: don't generate per-iteration output
+        :return:
+        '''
+        #'-quiet -nc -repeat 5 -tune -lambda 0.01 -minfc 3'
+        quiet_ = [True]
+        nc_ = [True]
+        multiclass_ = [True]
+
+        maxi_ = [100, 125]
+        repeat_ = [3, 5]
+        tune_ = [False, True]
+        lambda_ = [1, 0.1, 0.01]
+        norm2_ = [True, False]
+        nobias_ = [True, False]
+        minfc_ = [1, 3]
+
+        params = [quiet_, nc_, multiclass_, maxi_, repeat_, tune_, lambda_, norm2_, nobias_, minfc_]
+        params2 = list(itertools.product(*params))
+        columns = ["-quiet", "-nc", "-multiclass", "-maxi", "-repeat", "-tune", "-lambda", "-norm2", "-nobias", "-minfc"]
+        return params2, columns
+
+    def prepateTrainingFile(self):
+        os.system('chmod 755 "'+self.megamFile+'"')
+
+    def modellize(self):
+        self.prepateTrainingFile()
+        self.params, self.columns = self.defineParameters()
+        
+        print("Starting to modellize the parameters")
+        total = len(self.params)
+        
+        for i, param in enumerate(self.params):
+            parameters = ""
+            for c, p in zip(self.columns, param):
+                if type(p) is bool:
+                    if p:
+                        parameters+=" "+ c+" "
+                else:
+                    parameters+= c+" "+ str(p)+ " "
+            
+            # Now we have the parameters to tune the model
+            # Preparing output data results
+            date = datetime.now().strftime("%Hh%Mm_%d%m%Y")
+            directory_path = self.write_summary(date, parameters)
+            
+            # Train Model
+            self.train(parameters, directory_path)
+            
+            # Predict Results
+            self.predict(directory_path+"MODEL.dat", self.train_file, directory_path+"train.txt", parameters)
+            self.predict(directory_path+"MODEL.dat", self.val_file, directory_path+"devel.txt", parameters)
+            self.predict(directory_path+"MODEL.dat", self.test_file, directory_path+"test.txt", parameters)
+            
+            # Evaluate Model
+            self.evaluate(directory_path)
+            
+            if not (i % int(total/5)):
+                print("[INFO] "+ str(int(i/total*100))+"% complete.", flush=True)
+
+    def write_summary(self, name, parameters):
+        """
+        Write down the new detection of the video into the Summary file
+        :param date: current time stamp for naming the directory
+        :return: new name of the directory where video will be saved into
+        """
+        # open results file
+        try:
+            with open('outputs/Summary.txt', "r+") as fil:
+                # first we read the file
+                lines = fil.readlines()
+                index = int(str(lines[-1]).split("\t")[0]) + 1
+                print("Last index in summary file is " + str(index))
+                towrite = "\n" + str(index) + "\t\t" + name + "\t\t" + parameters
+                fil.write(towrite)
+
+        except IOError:
+            print('File {} does not exist. We proceed on creating it'.format('out/Summary.txt'))
+            f = open('out/Summary.txt', "x+")
+            f.write("Index\tDate\t\t\t\tParameters")
+            index = 0
+            towrite = "\n" + str(index) + "\t\t" + name + "\t\t" + parameters
+            f.write(towrite)
+        name = str(index) + "_" + name
+        return self.create_directory(name) +"/"
+
+    def create_directory(self, name):
+        """
+        Create the directory where the output is going to be placed in
+        :param name: name of the directory
+        """
+        try:
+            os.makedirs("model/" + name)
+            print("Directory " + "model/" + name + " created successfully")
+        except FileExistsError:
+            print("Directory " + "model/" + name + " already exists. We will introduce video in it")
+        return "model/" + name
+
+    def train(self, parameters, outfile_name):
+        '''
+        ! MEGAMFILE PARAMETERS "FEATURES PATH" > MODEL_NAME
+
+        :param outfile_name: directory of the file
+        :return:
+        '''
+        print(self.megamFile+ ' '+ parameters + '"'+ self.train_file+'" > "'+ outfile_name+'MODEL.dat"')
+        os.system(self.megamFile+ ' '+ parameters + '"'+ self.train_file+'" > "'+ outfile_name+'"')
+
+    def predict(self, model_path, features_path, output_path, parameters):
+        '''
+        ! MEGAMFILE -quiet -nc -nobias -predict  "MODEL_PATH"  multiclass "FEATURES PATH" > OUTPUT_PREDICTIONS
+
+        :param parameters: -QUIET, -NC, -NOBIAS, -PREDICT -MULTICLASS
+        :return:
+        '''
+        s = ""
+        if "nobias" in parameters:
+            s = " -nobias "
+
+        print(self.megamFile+ ' -quiet -nc '+ s + ' -predict "'+ model_path+'"  multiclass "'+ features_path+'" > "'+ output_path+'"')
+        os.system(self.megamFile+ ' -quiet -nc '+ s + ' -predict "'+ model_path+'"  multiclass "'+ features_path+'" > "'+ output_path+'"')
+
+    def loadData(self, path):
+        with open(path) as file:
+            data = file.readlines()
+            # you may also want to remove whitespace characters like `\n` at the end of each line
+            data = [x.strip().split("\t") for x in data]
+        return data
+
+    def evaluate(self, prediction_path):
+        # UPLOAD FEATURES
+        train_set = self.loadData(self.train_file)
+        devel_set =  self.loadData(self.val_file)
+        test_set =  self.loadData(self.test_file)
+
+        y_train = [item[0] for item in train_set]
+        y_devel = [item[0] for item in devel_set]
+        y_test = [item[0] for item in test_set]
+
+        # UPLOAD PREDICTIONS
+        pred_train_set =  self.loadData(prediction_path+"train.txt")
+        pred_devel_set =  self.loadData(prediction_path+"devel.txt")
+        pred_test_set =  self.loadData(prediction_path+"test.txt")
+
+        pred_train = [item[0] for item in pred_train_set]
+        pred_devel = [item[0] for item in pred_devel_set]
+        pred_test = [item[0] for item in pred_test_set]
+
+        file_results = open(prediction_path+"Evaluation.txt", "w+")
+
+        print("TRAINING\n" + classification_report(y_train, pred_train), file=file_results)
+        print("\nVALIDATION\n" + classification_report(y_devel, pred_devel), file=file_results)
+        print("\nTESTING\n" + classification_report(y_test, pred_test), file=file_results)
+
+        file_results.close()
+
+if __name__ == '__main__':
+    trainer = Trainer()
+    trainer.modellize()
+    #learner.classify()
