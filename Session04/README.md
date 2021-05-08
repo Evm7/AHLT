@@ -9,4 +9,4 @@ In this session we are providing DDI results by the analysis and training with M
           - train_features.txt
           - devel_features.txt
           - test_features.txt
-        - models/megam_i686.opt --> file which has the model.opt extracted from [http://users.umiacs.umd.edu/~hal/megam/version0_91/](here)
+        - models/megam_i686.opt --> file which has the model.opt extracted from [MEGAM](http://users.umiacs.umd.edu/~hal/megam/version0_91/)
