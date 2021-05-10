@@ -2,6 +2,7 @@ import sys
 import os
 sys.path.append("../")
 import itertools
+import subprocess
 
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 
@@ -11,15 +12,11 @@ from datetime import datetime
 class Trainer():
     def __init__(self):
 
-        self.train_file = "outputs/train_features"
-        self.val_file = "outputs/devel_features"
-        self.test_file = "outputs/test_features"
-
-        self.outfile_name = "model/model_trained.dat"
+        self.train_file = "features/train_features.txt"
+        self.val_file = "features/devel_features.txt"
+        self.test_file = "features/test_features.txt"
 
         self.megamFile = "models/megam_i686.opt"
-
-        print("Starting to train a learner saved in " + self.outfile_name)
 
 
     def defineParameters(self):
@@ -49,9 +46,9 @@ class Trainer():
         nobias_ = [True, False]
         minfc_ = [1, 3]
 
-        params = [quiet_, nc_, multiclass_, maxi_, repeat_, tune_, lambda_, norm2_, nobias_, minfc_]
+        params = [quiet_, nc_, maxi_, repeat_, tune_, lambda_, norm2_, nobias_, minfc_, multiclass_]
         params2 = list(itertools.product(*params))
-        columns = ["-quiet", "-nc", "-multiclass", "-maxi", "-repeat", "-tune", "-lambda", "-norm2", "-nobias", "-minfc"]
+        columns = ["-quiet", "-nc", "-maxi", "-repeat", "-tune", "-lambda", "-norm2", "-nobias", "-minfc", "multiclass"]
         return params2, columns
 
     def prepateTrainingFile(self):
@@ -60,10 +57,10 @@ class Trainer():
     def modellize(self):
         self.prepateTrainingFile()
         self.params, self.columns = self.defineParameters()
-        
+
         print("Starting to modellize the parameters")
         total = len(self.params)
-        
+
         for i, param in enumerate(self.params):
             parameters = ""
             for c, p in zip(self.columns, param):
@@ -72,23 +69,23 @@ class Trainer():
                         parameters+=" "+ c+" "
                 else:
                     parameters+= c+" "+ str(p)+ " "
-            
+
             # Now we have the parameters to tune the model
             # Preparing output data results
             date = datetime.now().strftime("%Hh%Mm_%d%m%Y")
             directory_path = self.write_summary(date, parameters)
-            
+
             # Train Model
             self.train(parameters, directory_path)
-            
+
             # Predict Results
             self.predict(directory_path+"MODEL.dat", self.train_file, directory_path+"train.txt", parameters)
             self.predict(directory_path+"MODEL.dat", self.val_file, directory_path+"devel.txt", parameters)
             self.predict(directory_path+"MODEL.dat", self.test_file, directory_path+"test.txt", parameters)
-            
+
             # Evaluate Model
             self.evaluate(directory_path)
-            
+
             if not (i % int(total/5)):
                 print("[INFO] "+ str(int(i/total*100))+"% complete.", flush=True)
 
@@ -110,7 +107,7 @@ class Trainer():
 
         except IOError:
             print('File {} does not exist. We proceed on creating it'.format('out/Summary.txt'))
-            f = open('out/Summary.txt', "x+")
+            f = open('outputs/Summary.txt', "x+")
             f.write("Index\tDate\t\t\t\tParameters")
             index = 0
             towrite = "\n" + str(index) + "\t\t" + name + "\t\t" + parameters
@@ -124,11 +121,11 @@ class Trainer():
         :param name: name of the directory
         """
         try:
-            os.makedirs("model/" + name)
-            print("Directory " + "model/" + name + " created successfully")
+            os.makedirs("outputs/" + name)
+            print("Directory " + "outputs/" + name + " created successfully")
         except FileExistsError:
-            print("Directory " + "model/" + name + " already exists. We will introduce video in it")
-        return "model/" + name
+            print("Directory " + "outputs/" + name + " already exists. We will introduce video in it")
+        return "outputs/" + name
 
     def train(self, parameters, outfile_name):
         '''
@@ -138,7 +135,7 @@ class Trainer():
         :return:
         '''
         print(self.megamFile+ ' '+ parameters + '"'+ self.train_file+'" > "'+ outfile_name+'MODEL.dat"')
-        os.system(self.megamFile+ ' '+ parameters + '"'+ self.train_file+'" > "'+ outfile_name+'"')
+        return os.system(self.megamFile+ ' '+ parameters + '"'+ self.train_file+'" > "'+ outfile_name+'MODEL.dat"')
 
     def predict(self, model_path, features_path, output_path, parameters):
         '''
@@ -152,7 +149,7 @@ class Trainer():
             s = " -nobias "
 
         print(self.megamFile+ ' -quiet -nc '+ s + ' -predict "'+ model_path+'"  multiclass "'+ features_path+'" > "'+ output_path+'"')
-        os.system(self.megamFile+ ' -quiet -nc '+ s + ' -predict "'+ model_path+'"  multiclass "'+ features_path+'" > "'+ output_path+'"')
+        return os.system(self.megamFile+ ' -quiet -nc '+ s + ' -predict "'+ model_path+'"  multiclass "'+ features_path+'" > "'+ output_path+'"')
 
     def loadData(self, path):
         with open(path) as file:
@@ -187,6 +184,41 @@ class Trainer():
         print("\nTESTING\n" + classification_report(y_test, pred_test), file=file_results)
 
         file_results.close()
+        results = ""
+        results += self.summarizeResults(y_train, pred_train)
+        results += self.summarizeResults(y_devel, pred_devel)
+        results += self.summarizeResults(y_test, pred_test)
+
+        self.writeResults(prediction_path, results)
+
+    def writeResults(self, name, results):
+        # open results file
+        try:
+            with open('outputs/Results.txt', "r+") as fil:
+                # first we read the file
+                lines = fil.readlines()
+                index = int(str(lines[-1]).split(";")[0]) + 1
+                print("Last index in summary file is " + str(index))
+                towrite = "\n" + str(index) + ";" + name + ";" + results
+                fil.write(towrite)
+
+        except IOError:
+            print('File {} does not exist. We proceed on creating it'.format('outputs/Results.txt'))
+            f = open('outputs/Results.txt', "x+")
+            f.write("Index;Date;Train Acc;Train MacroAvg F1;Train W.Avg F1;Val Acc;Val MacroAvg F1;Val W.Avg F1;Test Acc;Test MacroAvg F1;Test W.Avg F1;")
+            index = 0
+            towrite = "\n" + str(index) + ";" + name + ";" + results
+            f.write(towrite)
+
+
+    def summarizeResults(self,y_, pred_):
+        final = ""
+        res = classification_report(y_, pred_, output_dict=True)
+        final += str("%.3f" %res['accuracy']) + ";"
+        final += str("%.3f" % res['macro avg']['f1-score']) + ";"
+        final += str("%.3f" %res['weighted avg']['f1-score']) + ";"
+        return final
+
 
 if __name__ == '__main__':
     trainer = Trainer()
