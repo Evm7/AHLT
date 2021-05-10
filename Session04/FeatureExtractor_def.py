@@ -101,10 +101,6 @@ class FeatureExtractor():
         feat = {}
         nodes = analysis.nodes
 
-        # Type of Entity as features
-        feat["type1"]=entities[e1]["type"]
-        feat["type2"]=entities[e2]["type"]
-
         # Get entities
         entity1, entity2 = self.getNodes(nodes, entities, e1, e2)
 
@@ -173,7 +169,7 @@ class FeatureExtractor():
                 if end2 < v['start']:
                     feat["lemma_after"] = v["lemma"]
         # count the word between both the pair
-        feat["words_in_between"] = words_in_between
+        feat["number_of_words_in_between"] = words_in_between
 
         ## check number of other entities in between the given pair
         for ent in other_entities:
@@ -201,7 +197,7 @@ class FeatureExtractor():
             feat['advise_bef'] = feat["lemma_before"] in ['administer', 'take', 'if']
             feat['mechanism_bef'] = feat["lemma_before"] in ['plasma', 'combination']
 
-
+        '''
         effect_between = ["administer", "potentiate", "prevent", "may", "effects", "response", "certain", "include"]
         null_between = ["acid", "drugs"]
 
@@ -213,7 +209,13 @@ class FeatureExtractor():
 
         if self.words_inbetweens(analysis, e1,e2, entities, null_between):
             feat['null_between'] = True
-            
+        '''
+
+        words_between = self.words_inbetweens(analysis, e1, e2, entities)
+        words_between = sorted(words_between)
+        if(len(words_between)>=1):
+            feat['words_in_between']=' '.join(words_between)
+
         features = []
 
         for k, v in feat.items():
@@ -232,20 +234,18 @@ class FeatureExtractor():
                 a.append(l)
         return a
 
-    def words_inbetweens(self, analysis, e1,e2, entities, words):
+    def words_inbetweens(self, analysis, e1,e2, entities):
         '''
         Check if certain words are placed inbetween our entities. Return True if they are.
         '''
-        word = "..."
+        words_between = []
         nodes = analysis.nodes
         for w in nodes:
-            if not ";" in entities.get(e1)["offset"][1] and not ";" in entities.get(e2)["offset"][0] and None != analysis.get_by_address(w)['word']:
-                if int(analysis.get_by_address(w)['start']) > int(entities.get(e1)["offset"][1]) and int(
-                        analysis.get_by_address(w)['start']) < int(entities.get(e2)["offset"][0]):
-                    word = analysis.get_by_address(w)['word']
-                if word in words:
-                    return True
-        return False
+            if not ";" in entities.get(e1)[1] and not ";" in entities.get(e2)[0] and None != analysis.get_by_address(w)['word']:
+                if int(analysis.get_by_address(w)['start']) > int(entities.get(e1)[1]) and int(
+                        analysis.get_by_address(w)['start']) < int(entities.get(e2)[0]):
+                    words_between.append(analysis.get_by_address(w)['word'])
+        return words_between
 
     def check_inbetweens(self, start_e, end_e, start_k, end_k):
         '''
@@ -262,8 +262,8 @@ class FeatureExtractor():
         Allows to return all the nodes which are referenced with the identifier e1.
         """
         ents1 = []
-        start1 = entities[e1]["offset"][0].split(";")
-        end1 = entities[e1]["offset"][1].split(";")
+        start1 = entities[e1][0].split(";")
+        end1 = entities[e1][1].split(";")
 
         for k in list(tree.keys()):
             if 'start' in tree[k].keys():
@@ -280,10 +280,10 @@ class FeatureExtractor():
         ents1 = []
         ents2 = []
 
-        start1 = entities[e1]["offset"][0].split(";")
-        start2 = entities[e2]["offset"][0].split(";")
-        end1 = entities[e1]["offset"][1].split(";")
-        end2 = entities[e2]["offset"][1].split(";")
+        start1 = entities[e1][0].split(";")
+        start2 = entities[e2][0].split(";")
+        end1 = entities[e1][1].split(";")
+        end2 = entities[e2][1].split(";")
 
         for k in list(tree.keys()):
             if 'start' in tree[k].keys():
@@ -344,9 +344,7 @@ class FeatureExtractor():
                 ents = s.getElementsByTagName("entity")
                 for e in ents:
                     eid = e.attributes["id"].value
-                    entities[eid] = {}
-                    entities[eid]["type"] = e.attributes["type"].value
-                    entities[eid]["offset"] = e.attributes["charOffset"].value.split("-")
+                    entities[eid] = e.attributes["charOffset"].value.split("-")
 
                 # Tokenize , tag , and parse sentence
                 if "%" not in stext:
@@ -366,7 +364,6 @@ class FeatureExtractor():
                     # target entities
                     id_e1 = p.attributes["e1"].value
                     id_e2 = p.attributes["e2"].value
-
                     feats = self.extract_features(analysis, entities, id_e1, id_e2)
                     print(dditype, "\t".join(feats), sep="\t", file = self.f)
                     print(sid, id_e1, id_e2, dditype, "\t".join(feats), sep="\t", file = self.f_info)
