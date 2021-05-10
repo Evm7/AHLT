@@ -4,6 +4,7 @@ import sys
 from os import listdir
 
 import nltk
+
 nltk.download('stopwords')
 
 sys.path.append("../")
@@ -12,16 +13,17 @@ from xml.dom.minidom import parse
 
 import argparse
 
+
 class FeatureExtractor():
     def __init__(self):
         args = self.parse_arguments()
 
         self.datadir = args["datadir"]
-        self.outfile_name = "outputs/"+ args["outfile"]
+        self.outfile_name = "outputs/" + args["outfile"]
         self.external = args["external"]
 
-        self.f = open(self.outfile_name+"_features.txt", "w+")
-        self.f_info = open(self.outfile_name+"_info_features.txt", "w+")
+        self.f = open(self.outfile_name + "_features.txt", "w+")
+        self.f_info = open(self.outfile_name + "_info_features.txt", "w+")
 
         # Launch a CoreNLP server
         # cd stanford-corenlp-full-2018-10-05
@@ -38,9 +40,11 @@ class FeatureExtractor():
     def parse_arguments(self):
         # construct the argument parser
         parser = argparse.ArgumentParser()
-        parser.add_argument('-datadir', '--datadir', type=str, default="../data/train/", help='Directory with XML files to process')
+        parser.add_argument('-datadir', '--datadir', type=str, default="../data/train/",
+                            help='Directory with XML files to process')
         parser.add_argument('-outfile', '--outfile', type=str, default="train", help='Name for the output file')
-        parser.add_argument('--external', action="store_false", default=True, help='Whether to use external resources or not')
+        parser.add_argument('--external', action="store_false", default=True,
+                            help='Whether to use external resources or not')
         args = vars(parser.parse_args())
         return args
 
@@ -48,9 +52,9 @@ class FeatureExtractor():
         splits = ["train", "devel", "test"]
         print("We are proceeding with all the three files")
         for s in splits:
-            print("Starting with : "+ s)
-            self.datadir = "../data/"+s+"/"
-            self.outfile_name= "outputs/"+s
+            print("Starting with : " + s)
+            self.datadir = "../data/" + s + "/"
+            self.outfile_name = "outputs/" + s
             self.f = open(self.outfile_name + "_features.txt", "w+")
             self.f_info = open(self.outfile_name + "_info_features.txt", "w+")
             self.process_directory()
@@ -83,7 +87,6 @@ class FeatureExtractor():
             i += 1
         return mytree
 
-
     def extract_features(self, analysis, entities, e1, e2):
         '''
         Task :
@@ -101,6 +104,10 @@ class FeatureExtractor():
         feat = {}
         nodes = analysis.nodes
 
+        # Type of Entity as features
+        feat["type1"] = entities[e1]["type"]
+        feat["type2"] = entities[e2]["type"]
+
         # Get entities
         entity1, entity2 = self.getNodes(nodes, entities, e1, e2)
 
@@ -108,15 +115,14 @@ class FeatureExtractor():
 
         other_entities = [self.getNodes_Individual(nodes, entities, id_) for id_ in id_others]
 
-        feat["error"]= False
+        feat["error"] = False
         # If entities can not be retrieved, no DDI --> null
-        if len(entity1) < 1 or len(entity2)< 1:
+        if len(entity1) < 1 or len(entity2) < 1:
             return ["error"]
 
         # Get parent Nodes of each entity
         parent1, rel1 = self.getParentNode(nodes, entity1)
         parent2, rel2 = self.getParentNode(nodes, entity2)
-
 
         # information about parent1
         feat["lemma1"] = parent1["lemma"]
@@ -131,9 +137,8 @@ class FeatureExtractor():
         feat["tag2"] = parent2["tag"]
 
         # If entity1 is under entity2, or visceversa
-        feat["is_under1"]= self.is_under(entity1, entity2)
-        feat["is_under2"]= self.is_under(entity2, entity1)
-
+        feat["is_under1"] = self.is_under(entity1, entity2)
+        feat["is_under2"] = self.is_under(entity2, entity1)
 
         feat["sameNode"] = False
         feat["under_verb"] = False
@@ -144,14 +149,12 @@ class FeatureExtractor():
             feat["sameNode"] = True
 
             if tag == 'v':
-                feat["under_verb"]=True
+                feat["under_verb"] = True
 
         start1 = min([e['start'] for e in entity1])
         end1 = max([e['end'] for e in entity1])
         start2 = min([e['start'] for e in entity2])
         end2 = max([e['end'] for e in entity2])
-
-
 
         words_in_between = 0
         for v in list(analysis.nodes.values()):
@@ -164,57 +167,51 @@ class FeatureExtractor():
                     if v['tag'].lower() == "in":
                         feat["prep_inbetween"] = v["lemma"]
 
-                    words_in_between +=1
+                    words_in_between += 1
                     feat["lemma_inbetween"] = v["lemma"]
                 if end2 < v['start']:
                     feat["lemma_after"] = v["lemma"]
         # count the word between both the pair
-        feat["number_of_words_in_between"] = words_in_between
+        feat["words_in_between"] = words_in_between
 
         ## check number of other entities in between the given pair
         for ent in other_entities:
-            if len(ent)>0:
+            if len(ent) > 0:
                 start_other = min([e['start'] for e in ent])
                 if end1 < start_other < start2:
                     feat["other_entities"] = True
 
-
         # FEATURES EXTRACTED FROM EDAs
         # information about parent1 being classes
         feat['int1'] = parent1['lemma'] in ['interact', 'interaction', 'other', 'study', 'supplement']
-        feat['advise1'] = parent1['lemma'] in ['take', 'administer', 'bind', 'adjustment', 'avoid', 'recommend', 'contraindicate']
+        feat['advise1'] = parent1['lemma'] in ['take', 'administer', 'bind', 'adjustment', 'avoid', 'recommend',
+                                               'contraindicate']
         feat['effect1'] = parent1['lemma'] in ['effect', 'enhance', 'receive', 'response', 'action', 'diminish']
-        feat['mechanism1'] = parent1['lemma'] in ['increase', 'binding', 'clearance', 'concentration', 'concentrations', 'absorption', 'metabolism', 'presence', 'administration', 'inhibit', 'level']
+        feat['mechanism1'] = parent1['lemma'] in ['increase', 'binding', 'clearance', 'concentration', 'concentrations',
+                                                  'absorption', 'metabolism', 'presence', 'administration', 'inhibit',
+                                                  'level']
 
         # information about parent2 being classes
         feat['int2'] = parent2['lemma'] in ['aminoglycoside', 'aminoglycoside', 'interact', 'interaction']
         feat['advise2'] = parent2['lemma'] in ['dose', 'medication', 'take', 'caution']
-        feat['effect2'] = parent2['lemma'] in [None, 'action', 'activity', 'agent', 'effect', 'steroid', 'response', 'acetaminophen']
-        feat['mechanism2'] = parent2['lemma'] in ['absorption', 'clearance', 'intake', 'level', 'concentration', 'concentrations','metabolism']
+        feat['effect2'] = parent2['lemma'] in [None, 'action', 'activity', 'agent', 'effect', 'steroid', 'response',
+                                               'acetaminophen']
+        feat['mechanism2'] = parent2['lemma'] in ['absorption', 'clearance', 'intake', 'level', 'concentration',
+                                                  'concentrations', 'metabolism']
 
         # information about before nouns
         if "lemma_before" in feat:
             feat['advise_bef'] = feat["lemma_before"] in ['administer', 'take', 'if']
             feat['mechanism_bef'] = feat["lemma_before"] in ['plasma', 'combination']
 
-        '''
-        effect_between = ["administer", "potentiate", "prevent", "may", "effects", "response", "certain", "include"]
-        null_between = ["acid", "drugs"]
-
-        feat['effect_between'] = False
-        feat['null_between'] = False
-
-        if self.words_inbetweens(analysis, e1,e2, entities, effect_between):
-            feat['effect_between'] = True
-
-        if self.words_inbetweens(analysis, e1,e2, entities, null_between):
-            feat['null_between'] = True
-        '''
-
-        words_between = self.words_inbetweens(analysis, e1, e2, entities)
+        words_between, tags_in_between = self.words_inbetweens(analysis, e1, e2, entities)
         words_between = sorted(words_between)
+
         if(len(words_between)>=1):
             feat['words_in_between']=' '.join(words_between)
+
+        if(len(tags_in_between)>=1):
+            feat['tags_in_between'] =' '.join(tags_in_between)
 
         features = []
 
@@ -223,7 +220,7 @@ class FeatureExtractor():
                 if v:
                     features.append(k)
             else:
-                features.append(str(k)+"="+str(v))
+                features.append(str(k) + "=" + str(v))
 
         return features
 
@@ -239,13 +236,15 @@ class FeatureExtractor():
         Check if certain words are placed inbetween our entities. Return True if they are.
         '''
         words_between = []
+        tags_in_between = []
         nodes = analysis.nodes
         for w in nodes:
-            if not ";" in entities.get(e1)[1] and not ";" in entities.get(e2)[0] and None != analysis.get_by_address(w)['word']:
-                if int(analysis.get_by_address(w)['start']) > int(entities.get(e1)[1]) and int(
-                        analysis.get_by_address(w)['start']) < int(entities.get(e2)[0]):
+            if not ";" in entities.get(e1)["offset"][1] and not ";" in entities.get(e2)["offset"][0] and None != analysis.get_by_address(w)['word']:
+                if int(analysis.get_by_address(w)['start']) > int(entities.get(e1)["offset"][1]) and int(
+                        analysis.get_by_address(w)['start']) < int(entities.get(e2)["offset"][0]):
                     words_between.append(analysis.get_by_address(w)['word'])
-        return words_between
+                    tags_in_between.append(analysis.get_by_address(w)['tag'])
+        return words_between, tags_in_between
 
     def check_inbetweens(self, start_e, end_e, start_k, end_k):
         '''
@@ -255,15 +254,16 @@ class FeatureExtractor():
         '''
         ranger_tree = range(int(start_k), int(end_k) + 1)
         ranger_entity = range(int(start_e), int(end_e) + 1)
-        return (int(start_e) in ranger_tree or int(end_e) in ranger_tree) or (start_k in ranger_entity and end_k in ranger_entity)
+        return (int(start_e) in ranger_tree or int(end_e) in ranger_tree) or (
+                    start_k in ranger_entity and end_k in ranger_entity)
 
     def getNodes_Individual(self, tree, entities, e1):
         """
         Allows to return all the nodes which are referenced with the identifier e1.
         """
         ents1 = []
-        start1 = entities[e1][0].split(";")
-        end1 = entities[e1][1].split(";")
+        start1 = entities[e1]["offset"][0].split(";")
+        end1 = entities[e1]["offset"][1].split(";")
 
         for k in list(tree.keys()):
             if 'start' in tree[k].keys():
@@ -280,10 +280,10 @@ class FeatureExtractor():
         ents1 = []
         ents2 = []
 
-        start1 = entities[e1][0].split(";")
-        start2 = entities[e2][0].split(";")
-        end1 = entities[e1][1].split(";")
-        end2 = entities[e2][1].split(";")
+        start1 = entities[e1]["offset"][0].split(";")
+        start2 = entities[e2]["offset"][0].split(";")
+        end1 = entities[e1]["offset"][1].split(";")
+        end2 = entities[e2]["offset"][1].split(";")
 
         for k in list(tree.keys()):
             if 'start' in tree[k].keys():
@@ -344,7 +344,9 @@ class FeatureExtractor():
                 ents = s.getElementsByTagName("entity")
                 for e in ents:
                     eid = e.attributes["id"].value
-                    entities[eid] = e.attributes["charOffset"].value.split("-")
+                    entities[eid] = {}
+                    entities[eid]["type"] = e.attributes["type"].value
+                    entities[eid]["offset"] = e.attributes["charOffset"].value.split("-")
 
                 # Tokenize , tag , and parse sentence
                 if "%" not in stext:
@@ -353,30 +355,26 @@ class FeatureExtractor():
                     stext = stext.replace("%", "p")
                     analysis = self.analyze(stext)
 
-
                 # for each pair in the sentence , decide whether it is DDI and its type
                 pairs = s.getElementsByTagName("pair")
                 for p in pairs:
-                    #get ground truth
+                    # get ground truth
                     ddi = p.attributes["ddi"].value
-                    dditype = p.attributes["type"].value if ddi=="true" else "null"
+                    dditype = p.attributes["type"].value if ddi == "true" else "null"
 
                     # target entities
                     id_e1 = p.attributes["e1"].value
                     id_e2 = p.attributes["e2"].value
+
                     feats = self.extract_features(analysis, entities, id_e1, id_e2)
-                    print(dditype, "\t".join(feats), sep="\t", file = self.f)
-                    print(sid, id_e1, id_e2, dditype, "\t".join(feats), sep="\t", file = self.f_info)
+                    print(dditype, "\t".join(feats), sep="\t", file=self.f)
+                    print(sid, id_e1, id_e2, dditype, "\t".join(feats), sep="\t", file=self.f_info)
 
-            if not (i % int(length/10)):
-                print("[INFO] "+ str(int(i/length*100))+"% complete.", flush=True)
-
-
+            if not (i % int(length / 10)):
+                print("[INFO] " + str(int(i / length * 100)) + "% complete.", flush=True)
 
         self.f.close()
         self.f_info.close()
-
-
 
 
 if __name__ == '__main__':
