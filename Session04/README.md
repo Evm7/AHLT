@@ -1,6 +1,7 @@
 RESULTS
 
 [10/05] : Best results obtained with information added of between entities, and verbs between.
+  - Obtained using MEGAM file and this parameters: -quiet  -nc -maxi 125 -repeat 5 -lambda 1  -nobias -minfc 3  multiclass 
 
 |     TRAINING    	|  tp  	|  fp 	|  fn  	| #pred 	| #exp 	|   P   	|   R   	|   F1  	|
 |:---------------:	|:----:	|:---:	|:----:	|:-----:	|:----:	|:-----:	|:-----:	|:-----:	|
