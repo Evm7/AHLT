@@ -101,6 +101,10 @@ class FeatureExtractor():
         feat = {}
         nodes = analysis.nodes
 
+        # Type of Entity as features
+        feat["type1"]=entities[e1]["type"]
+        feat["type2"]=entities[e2]["type"]
+
         # Get entities
         entity1, entity2 = self.getNodes(nodes, entities, e1, e2)
 
@@ -235,9 +239,9 @@ class FeatureExtractor():
         word = "..."
         nodes = analysis.nodes
         for w in nodes:
-            if not ";" in entities.get(e1)[1] and not ";" in entities.get(e2)[0] and None != analysis.get_by_address(w)['word']:
-                if int(analysis.get_by_address(w)['start']) > int(entities.get(e1)[1]) and int(
-                        analysis.get_by_address(w)['start']) < int(entities.get(e2)[0]):
+            if not ";" in entities.get(e1)["offset"][1] and not ";" in entities.get(e2)["offset"][0] and None != analysis.get_by_address(w)['word']:
+                if int(analysis.get_by_address(w)['start']) > int(entities.get(e1)["offset"][1]) and int(
+                        analysis.get_by_address(w)['start']) < int(entities.get(e2)["offset"][0]):
                     word = analysis.get_by_address(w)['word']
                 if word in words:
                     return True
@@ -258,8 +262,8 @@ class FeatureExtractor():
         Allows to return all the nodes which are referenced with the identifier e1.
         """
         ents1 = []
-        start1 = entities[e1][0].split(";")
-        end1 = entities[e1][1].split(";")
+        start1 = entities[e1]["offset"][0].split(";")
+        end1 = entities[e1]["offset"][1].split(";")
 
         for k in list(tree.keys()):
             if 'start' in tree[k].keys():
@@ -276,10 +280,10 @@ class FeatureExtractor():
         ents1 = []
         ents2 = []
 
-        start1 = entities[e1][0].split(";")
-        start2 = entities[e2][0].split(";")
-        end1 = entities[e1][1].split(";")
-        end2 = entities[e2][1].split(";")
+        start1 = entities[e1]["offset"][0].split(";")
+        start2 = entities[e2]["offset"][0].split(";")
+        end1 = entities[e1]["offset"][1].split(";")
+        end2 = entities[e2]["offset"][1].split(";")
 
         for k in list(tree.keys()):
             if 'start' in tree[k].keys():
@@ -340,7 +344,9 @@ class FeatureExtractor():
                 ents = s.getElementsByTagName("entity")
                 for e in ents:
                     eid = e.attributes["id"].value
-                    entities[eid] = e.attributes["charOffset"].value.split("-")
+                    entities[eid] = {}
+                    entities[eid]["type"] = e.attributes["type"].value
+                    entities[eid]["offset"] = e.attributes["charOffset"].value.split("-")
 
                 # Tokenize , tag , and parse sentence
                 if "%" not in stext:
@@ -360,6 +366,7 @@ class FeatureExtractor():
                     # target entities
                     id_e1 = p.attributes["e1"].value
                     id_e2 = p.attributes["e2"].value
+
                     feats = self.extract_features(analysis, entities, id_e1, id_e2)
                     print(dditype, "\t".join(feats), sep="\t", file = self.f)
                     print(sid, id_e1, id_e2, dditype, "\t".join(feats), sep="\t", file = self.f_info)
