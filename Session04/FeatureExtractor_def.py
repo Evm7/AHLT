@@ -124,6 +124,12 @@ class FeatureExtractor():
         parent1, rel1 = self.getParentNode(nodes, entity1)
         parent2, rel2 = self.getParentNode(nodes, entity2)
 
+        shortest_path, rels, steps = self.getShortestPath(nodes, entity1, entity2)
+        if len(rels)> 0:
+            if rels[0] is not None:
+                feat["rels"] = " ".join(rels)
+        feat["steps"] = steps
+
         # information about parent1
         feat["lemma1"] = parent1["lemma"]
         feat["rel1"] = rel1
@@ -183,7 +189,7 @@ class FeatureExtractor():
 
         # FEATURES EXTRACTED FROM EDAs
         # information about parent1 being classes
-        feat['int1'] = parent1['lemma'] in ['interact', 'interaction', 'other', 'study', 'supplement']
+        feat['int1'] = parent1['lemma'] in ['interact', 'interaction',' Interaction', 'other', 'study', 'supplement']
         feat['advise1'] = parent1['lemma'] in ['take', 'administer', 'bind', 'adjustment', 'avoid', 'recommend',
                                                'contraindicate']
         feat['effect1'] = parent1['lemma'] in ['effect', 'enhance', 'receive', 'response', 'action', 'diminish']
@@ -211,7 +217,7 @@ class FeatureExtractor():
             feat['words_in_between']=' '.join(words_between)
 
         if(len(tags_in_between)>=1):
-            feat['tags_in_between'] =' '.join(tags_in_between)
+            feat['tags_in_between'] = ' '.join(tags_in_between)
 
         features = []
 
@@ -295,6 +301,46 @@ class FeatureExtractor():
                         ents2.append(tree[k])
         return ents1, ents2
 
+    def getShortestPath(self, tree, ent1, ent2):
+        '''
+        Get the Shortest Path in dependencies between two entities, the rels of them and the number of steps
+        '''
+        addresses1 = {}
+        addr = [e['address'] for e in ent1]
+        for a in addr:
+            addresses1[a] = 0
+
+        ent1 = self.getParentNode(tree, ent1)[0]
+
+        addresses2 = {}
+        addr = [e['address'] for e in ent2]
+        for a in addr:
+            addresses2[a] = 0
+        ent2 = self.getParentNode(tree, ent2)[0]
+
+        i = 1
+        while(ent1['address']!=None):
+            addresses1[ent1['address']] = i
+            ent1 = self.getParentNode(tree, ent1)[0]
+            i+=1
+
+        i = 1
+        while(ent2['address']!=None):
+            addresses2[ent2['address']] = i
+            ent2 = self.getParentNode(tree, ent2)[0]
+            i+=1
+
+        shortest_path = []
+        steps = 0
+        for addr, num in addresses1.items():
+            shortest_path.append(addr)
+            if addr in addresses2.keys():
+                steps += num+ addresses2[addr]
+                break;
+
+        rels = [tree[addr]["rel"] for addr in shortest_path]
+        return shortest_path, rels, steps
+
     def getParentNode(self, tree, entity):
         """
         Function which obtains the parent of a given entity node and the type of relationship
@@ -303,10 +349,14 @@ class FeatureExtractor():
             return tree[entity[0]['head']], entity[0]['rel']
         parent = None
         rel = None
-        for e in entity:
-            if e['head'] not in [other['address'] for other in entity]:
-                parent = tree[e['head']]
-                rel = e['rel']
+        if type(entity) == list:
+            for e in entity:
+                if e['head'] not in [other['address'] for other in entity]:
+                    parent = tree[e['head']]
+                    rel = e['rel']
+        else:
+            parent = tree[entity['head']]
+            rel = entity['rel']
         return parent, rel
 
     def is_under(self, entity1, entity2):
@@ -354,6 +404,7 @@ class FeatureExtractor():
                 else:
                     stext = stext.replace("%", "p")
                     analysis = self.analyze(stext)
+
 
                 # for each pair in the sentence , decide whether it is DDI and its type
                 pairs = s.getElementsByTagName("pair")
