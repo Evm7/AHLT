@@ -163,22 +163,25 @@ class FeatureExtractor():
         end2 = max([e['end'] for e in entity2])
 
         words_in_between = 0
+        lemma_before = None
+        verb_in_between = None
         for v in list(analysis.nodes.values()):
             if 'start' in v.keys():
                 if v['start'] < start1:
-                    feat["lemma_before"] = v["lemma"]
+                    lemma_before = v["lemma"]
                 if end1 < v['start'] < start2:
                     if v['tag'].lower()[0] == "v":
-                        feat["verb_inbetween"] = v["lemma"]
+                        verb_in_between = v["lemma"]
                     if v['tag'].lower() == "in":
                         feat["prep_inbetween"] = v["lemma"]
 
                     words_in_between += 1
-                    feat["lemma_inbetween"] = v["lemma"]
                 if end2 < v['start']:
                     feat["lemma_after"] = v["lemma"]
+                    break
         # count the word between both the pair
         feat["words_in_between"] = words_in_between
+
 
         ## check number of other entities in between the given pair
         for ent in other_entities:
@@ -205,10 +208,16 @@ class FeatureExtractor():
         feat['mechanism2'] = parent2['lemma'] in ['absorption', 'clearance', 'intake', 'level', 'concentration',
                                                   'concentrations', 'metabolism']
 
+
         # information about before nouns
-        if "lemma_before" in feat:
-            feat['advise_bef'] = feat["lemma_before"] in ['administer', 'take', 'if']
-            feat['mechanism_bef'] = feat["lemma_before"] in ['plasma', 'combination']
+        if lemma_before is not None:
+            feat['advise_bef'] = lemma_before in ['administer', 'take', 'if', 'change', 'dosing']
+            feat['mechanism_bef'] = lemma_before in ['plasma', 'combination']
+            feat['null_bef'] = lemma_before in [";", 'after', 'agent', 'antidepressant', 'colestipol', 'contraceptive', 'decrease', 'drug', 'especially', 'inhalation', 'involve', 'many', 'may', 'mix', 'potent', 'potentiate','supplemental', 'where', 'whether', 'without']
+
+        if verb_in_between is not None:
+            feat["null_verb"] = verb_in_between in ["achieve", "work", "prevent" ,"pose", "ocurr", "do", "compare",  'conjugate', 'demonstrate', 'desire', 'evaluate', 'exist', 'identify', 'mean', 'obtain', 'prescribe', 'return', 'sensitize', 'spend', 'support']
+            feat["mechanism_verb"] = verb_in_between in ['displace', 'disolve', 'become']
 
         words_between, tags_in_between = self.words_inbetweens(analysis, e1, e2, entities)
         words_between = sorted(words_between)
