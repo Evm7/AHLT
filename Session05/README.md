@@ -1,3 +1,5 @@
+[09-06-2021] Adding another LSTM after the BiLSTm do not improve the results. Then, we reject this iteration
+
 [08-06-2021] When running with the first experimentation. We use a Input + Embedding + BiLSTM + TimeDistributed for 20 epochs
 
 |      TRAIN      	|   tp  	|  fp 	|  fn  	| #pred 	|  #exp 	|   P   	|   R   	|   F1  	|
