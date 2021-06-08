@@ -1,0 +1,1 @@
+[09/06/2021] Creation of the network. It works, but results show a lot of underfitting. Model do not learn and loss/accuracy is mantained invariant during the 20 epochs. Need to add some more complexity
