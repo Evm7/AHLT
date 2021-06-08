@@ -6,6 +6,9 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 import keras as k
 
+import pandas as pd
+from keras.preprocessing.sequence import pad_sequences
+
 from nltk.tokenize import word_tokenize
 from os import listdir
 import string, sys
@@ -25,7 +28,7 @@ nltk.download('stopwords')
 stopwords_ = set(stopwords.words('english'))
 
 from keras.models import Model, Input
-from keras.layers import LSTM, Embedding, Dense, TimeDistributed, Dropout, Bidirectional, Lambda, Layer
+from keras.layers import LSTM, Embedding, concatenate, Dense, TimeDistributed, Dropout, Bidirectional, Lambda, Layer
 from keras_contrib.layers import CRF
 from keras_contrib.losses import crf_loss
 from keras_contrib.metrics import crf_accuracy
@@ -109,19 +112,36 @@ class Learner():
         Create index dictionaries both for input ( words ) and output ( labels ) from given dataset .
         '''
         words = ['<PAD>', '<UNK>']
+        prefixes = ['<PAD>', '<UNK>']
+        suffixes = ['<PAD>', '<UNK>']
         labels = ['<PAD>']
+        positions = ['<PAD>','<UNK>']
         for data in list(dataset.values()):
+            pos = 0
             for w_pack in data:
                 if w_pack[0] not in words:
                     words.append(w_pack[0])
                 if w_pack[3] not in labels:
                     labels.append(w_pack[3])
+                if w_pack[0][:3] not in prefixes:
+                    prefixes.append(w_pack[0][:3])
+                if w_pack[0][-3:] not in suffixes:
+                    suffixes.append(w_pack[0][-3:])
+                if pos not in positions:
+                    positions.append(pos)
+                pos+=1
         words = {k: v for v, k in enumerate(words)}
         labels = {k: v for v, k in enumerate(labels)}
+        prefixes = {k: v for v, k in enumerate(prefixes)}
+        suffixes = {k: v for v, k in enumerate(suffixes)}
+        positions = {k: v for v, k in enumerate(positions)}
         result = {}
         result['words'] = words
         result['labels'] = labels
         result['maxlen'] = max_length
+        result["pref"] = prefixes
+        result["suff"] = suffixes
+        result["position"] = positions
         return result
 
     def encode_words(self, dataset, idx):
@@ -144,6 +164,53 @@ class Learner():
                 encoded_sentence.append(index)
             while len(encoded_sentence) < idx["maxlen"]:
                 encoded_sentence.append(idx["words"]['<PAD>'])
+            results.append(np.array(encoded_sentence))
+        return np.array(results)
+
+    def encode_positions(self, dataset, idx):
+        results = []
+        for sentence in dataset.values():
+            encoded_sentence = []
+            pos = 0
+            for word in sentence:
+                if pos in idx["position"]:
+                    index = idx["position"][pos]
+                else:
+                    index = idx["position"]['<UNK>']
+                encoded_sentence.append(index)
+                pos+=1
+            while len(encoded_sentence) < idx["maxlen"]:
+                encoded_sentence.append(idx["position"]['<PAD>'])
+            results.append(np.array(encoded_sentence))
+        return np.array(results)
+        
+    def encode_prefixes(self, dataset, idx):
+        results = []
+        for sentence in dataset.values():
+            encoded_sentence = []
+            for word in sentence:
+                if word[0][:3] in idx["pref"]:
+                    index = idx["pref"][word[0][:3]]
+                else:
+                    index = idx["pref"]['<UNK>']
+                encoded_sentence.append(index)
+            while len(encoded_sentence) < idx["maxlen"]:
+                encoded_sentence.append(idx["pref"]['<PAD>'])
+            results.append(np.array(encoded_sentence))
+        return np.array(results)
+
+    def encode_suffixes(self, dataset, idx):
+        results = []
+        for sentence in dataset.values():
+            encoded_sentence = []
+            for word in sentence:
+                if word[0][-3:] in idx["suff"]:
+                    index = idx["suff"][word[0][-3:]]
+                else:
+                    index = idx["suff"]['<UNK>']
+                encoded_sentence.append(index)
+            while len(encoded_sentence) < idx["maxlen"]:
+                encoded_sentence.append(idx["suff"]['<PAD>'])
             results.append(np.array(encoded_sentence))
         return np.array(results)
 
@@ -265,9 +332,12 @@ class Learner():
         testdata = self.load_data(datadir)
         # encode dataset
         X = self.encode_words(testdata, idx)
+        X_suff = self.encode_prefixes(testdata, idx)
+        X_pref = self.encode_suffixes(testdata, idx)
+        X_pos = self.encode_positions(testdata, idx)
 
         # tag sentences in dataset
-        Y = model.predict(X)
+        Y = model.predict([X, X_suff, X_pref, X_pos])
         reverse_labels= {y: x for x, y in idx['labels'].items()}
         Y = [[reverse_labels[np.argmax(y)] for y in s] for s in Y]
         # extract entities and dump them to output file
@@ -310,14 +380,19 @@ class Learner():
         # create indexes from training data
         max_len = 100
         idx = self.create_indexs(traindata, max_len)
-
         # build network
         model = self.build_network(idx)
-
         # encode datasets
         Xtrain = self.encode_words(traindata, idx)
+        Xtrain_suff = self.encode_prefixes(traindata, idx)
+        Xtrain_pref = self.encode_suffixes(traindata, idx)
+        Xtrain_pos = self.encode_positions(traindata, idx)
         Ytrain = self.encode_labels(traindata, idx)
+        
         Xval = self.encode_words(valdata, idx)
+        Xval_suff = self.encode_prefixes(valdata, idx)
+        Xval_pref = self.encode_suffixes(valdata, idx)
+        Xval_pos = self.encode_positions(valdata, idx)
         Yval = self.encode_labels(valdata, idx)
 
         # train model
@@ -328,7 +403,9 @@ class Learner():
         callbacks_list = [checkpoint]
 
         # Fit the best model
-        history = model.fit(Xtrain, Ytrain, validation_data=(Xval, Yval), batch_size=256, epochs=20, verbose=1, callbacks=callbacks_list)
+        history = model.fit([Xtrain, Xtrain_suff, Xtrain_pref, Xtrain_pos], Ytrain, 
+        validation_data=([Xval, Xval_suff, Xval_pref, Xval_pos], Yval), 
+        batch_size=256, epochs=20, verbose=1, callbacks=callbacks_list)
         '''
         model.fit(Xtrain, Ytrain, validation_data=(Xval, Yval), batch_size=256)
         '''
@@ -341,8 +418,8 @@ class Learner():
         # Plot the graph
         plt.style.use('ggplot')
 
-        accuracy = history.history['accuracy']
-        val_accuracy = history.history['val_accuracy']
+        accuracy = history.history['crf_viterbi_accuracy']
+        val_accuracy = history.history['val_crf_viterbi_accuracy']
         loss = history.history['loss']
         val_loss = history.history['val_loss']
         x = range(1, len(accuracy) + 1)
@@ -363,13 +440,24 @@ class Learner():
 
 
     def defineModel(self, n_words, n_labels, max_len):
-        input = Input(shape=(max_len,))
-        model = Embedding(input_dim=n_words, output_dim=450,
-                          input_length=max_len)(input)  # 20-dim embedding
-        model = Bidirectional(LSTM(units=max_len,
-                                   return_sequences=True,
-                                   recurrent_dropout=0.5,
-                                   ))(model)  # variational biLSTM
+        word_in = Input(shape=(max_len,))
+        word_emb = Embedding(input_dim=n_words, output_dim=100, input_length=max_len, trainable=True)(word_in)  # 20-dim embedding
+        
+        suf_in = Input(shape=(max_len,))
+        suf_emb = Embedding(input_dim=n_words, output_dim=100,
+                        input_length=max_len)(suf_in)
+
+        pref_in = Input(shape=(max_len,))
+        pref_emb = Embedding(input_dim=n_words, output_dim=100,
+                        input_length=max_len)(pref_in)
+
+        pos_in = Input(shape=(max_len,))
+        pos_emb = Embedding(input_dim=n_words, output_dim=100,
+                        input_length=max_len)(pos_in)
+
+        concat = concatenate([word_emb, suf_emb, pref_emb, pos_emb])
+        model = Dropout(0.2)(concat)
+
         '''
         model = LSTM(units=max_len * 2,
                      return_sequences=True,
@@ -377,13 +465,15 @@ class Learner():
                      recurrent_dropout=0.5,
                      kernel_initializer=k.initializers.he_normal())(model)
         '''
+
+        model = Bidirectional(LSTM(units=32,return_sequences=True,recurrent_dropout=0.5,))(model)  # variational biLSTM
         model = TimeDistributed(Dense(n_labels, activation="relu"))(model)  # a dense layer as suggested by neuralNer
 
         crf = CRF(units=n_labels)  # CRF layer
         out = crf(model)  # output
 
         # create and compile model
-        model = Model(input, out)
+        model = Model([word_in, suf_in, pref_in, pos_in], out)
         return model
 
     def build_network(self,idx):
@@ -405,4 +495,4 @@ class Learner():
 if __name__ == '__main__':
     learner = Learner()
     learner.learn("../data/train", "../data/devel", "firstmodel")
-    #learner.checkOutputs("firstmodel", "../data/test", "results.txt")
+    learner.predict("firstmodel", "../data/test", "results.txt")
