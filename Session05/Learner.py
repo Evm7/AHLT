@@ -1,3 +1,8 @@
+from numpy.random import seed
+seed(42)
+from tensorflow import set_random_seed
+set_random_seed(42)
+
 import nltk
 from nltk.corpus import stopwords
 from xml.dom.minidom import parse
@@ -5,6 +10,8 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 import keras as k
+
+from numpy.random import seed
 
 import pandas as pd
 from keras.preprocessing.sequence import pad_sequences
@@ -116,8 +123,12 @@ class Learner():
         suffixes = ['<PAD>', '<UNK>']
         labels = ['<PAD>']
         positions = ['<PAD>','<UNK>']
+        prevword = ['<PAD>','<UNK>']
+        nextword = ['<PAD>','<UNK>']
+        class_suffixes = ['<PAD>', 'brand', 'drug', 'drug_n', 'group', 'none']
         for data in list(dataset.values()):
             pos = 0
+            w_pack_prev = '<START>'
             for w_pack in data:
                 if w_pack[0] not in words:
                     words.append(w_pack[0])
@@ -129,19 +140,33 @@ class Learner():
                     suffixes.append(w_pack[0][-3:])
                 if pos not in positions:
                     positions.append(pos)
+                if w_pack_prev not in prevword:
+                    prevword.append(w_pack_prev)
+                if w_pack[0] not in nextword:
+                    nextword.append(w_pack[0])
+                w_pack_prev = w_pack[0]
                 pos+=1
+            if '<END>' not in nextword:
+                nextword.append('<END>')
         words = {k: v for v, k in enumerate(words)}
         labels = {k: v for v, k in enumerate(labels)}
         prefixes = {k: v for v, k in enumerate(prefixes)}
         suffixes = {k: v for v, k in enumerate(suffixes)}
         positions = {k: v for v, k in enumerate(positions)}
+        prevword = {k: v for v, k in enumerate(prevword)}
+        nextword = {k: v for v, k in enumerate(nextword)}
+        class_suffixes = {k: v for v, k in enumerate(class_suffixes)}
+
         result = {}
         result['words'] = words
-        result['labels'] = labels
+        result['labels'] = labels        
         result['maxlen'] = max_length
+        result['prev'] = prevword
+        result['next'] = nextword
         result["pref"] = prefixes
         result["suff"] = suffixes
         result["position"] = positions
+        result["class_suffixes"] = class_suffixes
         return result
 
     def encode_words(self, dataset, idx):
@@ -164,6 +189,21 @@ class Learner():
                 encoded_sentence.append(index)
             while len(encoded_sentence) < idx["maxlen"]:
                 encoded_sentence.append(idx["words"]['<PAD>'])
+            results.append(np.array(encoded_sentence))
+        return np.array(results)
+        
+    def encode_words_lower(self, dataset, idx):
+        results = []
+        for sentence in dataset.values():
+            encoded_sentence = []
+            for word in sentence:
+                if word[0].lower() in idx["words_lower"]:
+                    index = idx["words_lower"][word[0].lower()]
+                else:
+                    index = idx["words_lower"]['<UNK>']
+                encoded_sentence.append(index)
+            while len(encoded_sentence) < idx["maxlen"]:
+                encoded_sentence.append(idx["words_lower"]['<PAD>'])
             results.append(np.array(encoded_sentence))
         return np.array(results)
 
@@ -214,6 +254,103 @@ class Learner():
             results.append(np.array(encoded_sentence))
         return np.array(results)
 
+    def encode_prevwords(self, dataset, idx):
+        results = []
+        for sentence in dataset.values():
+            encoded_sentence = []
+            prevword = '<START>'
+            for word in sentence:
+                if prevword in idx["prev"]:
+                    index = idx["prev"][prevword]
+                else:
+                    index = idx["prev"]['<UNK>']
+                encoded_sentence.append(index)
+                prevword=word[0]
+            while len(encoded_sentence) < idx["maxlen"]:
+                encoded_sentence.append(idx["prev"]['<PAD>'])
+            results.append(np.array(encoded_sentence))
+        return np.array(results)
+
+    def encode_nextwords(self, dataset, idx):
+        results = []
+        for sentence in dataset.values():
+            encoded_sentence = []
+            for i in range(len(sentence)-1):
+                if sentence[i+1][0] in idx["next"]:
+                    index = idx["next"][sentence[i+1][0]]
+                else:
+                    index = idx["next"]['<UNK>']
+                encoded_sentence.append(index)
+            index = idx["next"]['<END>']
+            while len(encoded_sentence) < idx["maxlen"]:
+                encoded_sentence.append(idx["next"]['<PAD>'])
+            results.append(np.array(encoded_sentence))
+        return np.array(results)
+
+
+    def check_Prefixes(self, tok, pref):
+        for p in pref:
+            if str(tok).lower().startswith(p):
+                return True
+        return False
+
+    def check_Suffixes(self, tok, pref):
+        for p in pref:
+            if str(tok).endswith(p):
+                return True
+        return False
+
+    def check_contains(self, tok, cont):
+        for p in cont:
+            if p in str(tok):
+                return True
+        return False
+
+    def encode_class_suffixes(self, dataset, idx):
+        
+        suffixes = ["azole", "idine", "amine", "mycin", "xacin", "ostol", "adiol"]
+        suffixes_drug = ["ine", "cin", "ium", "vir","ide", "lam", "il", "ril", "cin", "tin"]
+        #suffixes_brand = ["gen"]
+        suffixes_brand = []
+        suffixes_group = ["ines", "ides", "cins", "oles"]
+
+        prefixes_drug_n = ['ibog', 'endo', "bombe", "contor", "dmp", "egf", "ginse", "heo", "ibo", "jac", "phen"]
+        #prefixes_brand = ["SPR", "Acc", "equ", "EQU"]
+        prefixes_brand = []
+        prefixes_group = ["beta-adre", "hmg", "monoamine", "calcium", "drugs", "sali", "quino", "ssri", "cepha", "sulfo", "TCA", "thiaz", "benzo", "barb", "contracept", "cortico", "digitalis", "diu", "central", "nervous", "system", "beta", "psycho", "cepha", "macro", "prot", "ace", "mao", "cardiac"]
+        prefixes_drug = ['digox', 'warfa', 'meth', 'theophy', 'lith', 'keto', 'cime', 'insu', 'fluox', 'alcoh', 'cyclos', 'eryth', 'carba', 'rifa', 'caffe']
+
+        contains_drug_n = ["MHD", "NaC", "MC", "gaine", "PTX", "PCP"]
+        contains_group = ["ids", "urea" ]
+        contains_brand = ["PEGA", "aspirin", "Aspirin", "XX", "IVA"]
+        '''
+        suffixes = ["azole", "idine", "amine", "mycin", "xacin", "ostol", "adiol"]
+        suffixes_drug = ["ine", "cin", "ium"]
+        suffixes_brand = ["gen"]
+        suffixes_group = ["ines", "ides", "cins", "oles"]
+        '''
+
+        results = []
+        for sentence in dataset.values():
+            encoded_sentence = []
+            for word in sentence:
+                token = word[0]
+                if token.isupper() or self.check_contains(token, contains_brand):
+                    index = idx["class_suffixes"]['brand']
+                elif self.check_Suffixes(token, suffixes_drug) or self.check_Suffixes(token, suffixes) or self.check_Prefixes(token, prefixes_drug):
+                    index = idx["class_suffixes"]['drug']
+                elif self.check_Suffixes(token, suffixes_group) or "agent" in token or self.check_Prefixes(token, prefixes_group) or self.check_contains(token, contains_group):
+                    index = idx["class_suffixes"]['group']
+                elif self.check_Prefixes(token, prefixes_drug_n) or self.check_contains(token, contains_drug_n):
+                    index = idx["class_suffixes"]['drug_n']
+                else:
+                    index = idx["class_suffixes"]['none']
+                encoded_sentence.append(index)
+            while len(encoded_sentence) < idx["maxlen"]:
+                encoded_sentence.append(idx["class_suffixes"]['<PAD>'])
+            results.append(np.array(encoded_sentence))
+        return np.array(results)
+
     def encode_labels(self, dataset, idx):
         '''
         Encode the ground truth labels in a sentence dataset formed by lists of
@@ -243,7 +380,7 @@ class Learner():
         with open(filename + '.idx', 'wb') as fp:
             pickle.dump(idx, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def load_model_and_indexs(self, filename):
+    def load_model_and_indexs(self, filename, embedding_matrix):
         '''
         Save given model and indexs to disk
         '''
@@ -252,7 +389,17 @@ class Learner():
         n_words = len(data['words'])
         n_labels = len(data['labels'])
         max_len = data['maxlen']
-        model = self.defineModel(n_words, n_labels, max_len)
+        
+        n_prev = len(data['prev'])
+        n_next = len(data['next'])
+        n_pref = len(data["pref"])
+        n_suff = len(data["suff"])
+        n_pos = len(data["position"])
+        n_class = len(data["class_suffixes"])
+
+        numbers=[n_words, n_suff, n_pref,n_pos,n_prev, n_next, n_class]
+
+        model = self.defineModel(numbers, n_labels, max_len, embedding_matrix)
         model.load_weights(filename + '.h5')
         return model, data
 
@@ -320,24 +467,27 @@ class Learner():
                     f.write(sid + '|' + element['offset'] + '|' + element['name'] + '|' + element['type'] + '\n')
         f.close()
 
-    def predict(self, modelname, datadir, outfile):
+    def predict(self, modelname, datadir, outfile, embedding_matrix):
         '''
         Loads a NN model from file ’modelname ’ and uses it to extract drugs
         in datadir . Saves results to ’outfile ’ in the appropriate format .
         '''
         print("[INFO]... Model in inference process")
         # load model and associated encoding data
-        model, idx = self.load_model_and_indexs(modelname)
+        model, idx = self.load_model_and_indexs(modelname, embedding_matrix)
         # load data to annotate
         testdata = self.load_data(datadir)
         # encode dataset
         X = self.encode_words(testdata, idx)
-        X_suff = self.encode_prefixes(testdata, idx)
-        X_pref = self.encode_suffixes(testdata, idx)
+        X_pref = self.encode_prefixes(testdata, idx)
+        X_suff = self.encode_suffixes(testdata, idx)
         X_pos = self.encode_positions(testdata, idx)
+        X_prev = self.encode_prevwords(testdata, idx)
+        X_next = self.encode_nextwords(testdata, idx)
+        X_class_suff = self.encode_class_suffixes(testdata, idx)
 
         # tag sentences in dataset
-        Y = model.predict([X, X_suff, X_pref, X_pos])
+        Y = model.predict([X, X_suff, X_pref, X_pos, X_prev, X_next, X_class_suff])
         reverse_labels= {y: x for x, y in idx['labels'].items()}
         Y = [[reverse_labels[np.argmax(y)] for y in s] for s in Y]
         # extract entities and dump them to output file
@@ -380,22 +530,48 @@ class Learner():
         # create indexes from training data
         max_len = 100
         idx = self.create_indexs(traindata, max_len)
-        # build network
-        model = self.build_network(idx)
+
         # encode datasets
         Xtrain = self.encode_words(traindata, idx)
-        Xtrain_suff = self.encode_prefixes(traindata, idx)
-        Xtrain_pref = self.encode_suffixes(traindata, idx)
+        Xtrain_pref = self.encode_prefixes(traindata, idx)
+        Xtrain_suff = self.encode_suffixes(traindata, idx)
         Xtrain_pos = self.encode_positions(traindata, idx)
+        Xtrain_prev = self.encode_prevwords(traindata, idx)
+        Xtrain_next = self.encode_nextwords(traindata, idx)
+        Xtrain_class_suff = self.encode_class_suffixes(traindata, idx)
         Ytrain = self.encode_labels(traindata, idx)
-        
-        Xval = self.encode_words(valdata, idx)
-        Xval_suff = self.encode_prefixes(valdata, idx)
-        Xval_pref = self.encode_suffixes(valdata, idx)
-        Xval_pos = self.encode_positions(valdata, idx)
-        Yval = self.encode_labels(valdata, idx)
 
+        Xval = self.encode_words(valdata, idx)
+        Xval_pref = self.encode_prefixes(valdata, idx)
+        Xval_suff = self.encode_suffixes(valdata, idx)
+        Xval_pos = self.encode_positions(valdata, idx)
+        Xval_prev = self.encode_prevwords(valdata, idx)
+        Xval_next = self.encode_nextwords(valdata, idx)
+        Xval_class_suff = self.encode_class_suffixes(valdata, idx)
+        Yval = self.encode_labels(valdata, idx)
+        
+        n_words=len(idx['words'])
+
+        # load the whole embedding into memory
+        embeddings_index = dict()
+        f = open('../data/glove.6B/glove.6B.100d.txt', encoding="utf8")
+        for line in f:
+            values = line.split()
+            word = values[0]
+            coefs = np.asarray(values[1:], dtype='float32')
+            embeddings_index[word] = coefs
+        f.close()
+
+        embedding_matrix = np.zeros((n_words, 100))
+        h=0
+        for word in idx['words']:
+            embedding_vector = embeddings_index.get(word)
+            if embedding_vector is not None:
+                embedding_matrix[h] = embedding_vector
+            h+=1
         # train model
+        # build network
+        model = self.build_network(idx, embedding_matrix)
 
         # Saving the best model only
         filepath = modelname+"-{val_crf_viterbi_accuracy:.3f}.hdf5"
@@ -403,9 +579,7 @@ class Learner():
         callbacks_list = [checkpoint]
 
         # Fit the best model
-        history = model.fit([Xtrain, Xtrain_suff, Xtrain_pref, Xtrain_pos], Ytrain, 
-        validation_data=([Xval, Xval_suff, Xval_pref, Xval_pos], Yval), 
-        batch_size=256, epochs=20, verbose=1, callbacks=callbacks_list)
+        history = model.fit([Xtrain, Xtrain_suff, Xtrain_pref, Xtrain_pos, Xtrain_prev, Xtrain_next, Xtrain_class_suff], Ytrain, validation_data=([Xval, Xval_suff, Xval_pref, Xval_pos, Xval_prev, Xval_next, Xval_class_suff], Yval), batch_size=256, epochs=20, verbose=1, callbacks=callbacks_list)
         '''
         model.fit(Xtrain, Ytrain, validation_data=(Xval, Yval), batch_size=256)
         '''
@@ -413,6 +587,7 @@ class Learner():
         self.save_model_and_indexs(model, idx, modelname)
 
         self.plot(history)
+        return embedding_matrix
 
     def plot(self, history):
         # Plot the graph
@@ -437,25 +612,35 @@ class Learner():
         plt.legend()
         plt.savefig("History_model.jpg")
 
-
-
-    def defineModel(self, n_words, n_labels, max_len):
+    def defineModel(self, numbers, n_labels, max_len, embedding_matrix):
         word_in = Input(shape=(max_len,))
-        word_emb = Embedding(input_dim=n_words, output_dim=100, input_length=max_len, trainable=True)(word_in)  # 20-dim embedding
+        word_emb = Embedding(input_dim=numbers[0], output_dim=100, input_length=max_len, trainable=False, weights = [embedding_matrix])(word_in)  # 20-dim embedding
         
         suf_in = Input(shape=(max_len,))
-        suf_emb = Embedding(input_dim=n_words, output_dim=100,
+        suf_emb = Embedding(input_dim=numbers[1], output_dim=100,
                         input_length=max_len)(suf_in)
 
         pref_in = Input(shape=(max_len,))
-        pref_emb = Embedding(input_dim=n_words, output_dim=100,
+        pref_emb = Embedding(input_dim=numbers[2], output_dim=100,
                         input_length=max_len)(pref_in)
 
         pos_in = Input(shape=(max_len,))
-        pos_emb = Embedding(input_dim=n_words, output_dim=100,
+        pos_emb = Embedding(input_dim=numbers[3], output_dim=100,
                         input_length=max_len)(pos_in)
 
-        concat = concatenate([word_emb, suf_emb, pref_emb, pos_emb])
+        prev_in = Input(shape=(max_len,))
+        prev_emb = Embedding(input_dim=numbers[4], output_dim=100,
+                        input_length=max_len)(prev_in)
+
+        next_in = Input(shape=(max_len,))
+        next_emb = Embedding(input_dim=numbers[5], output_dim=100,
+                        input_length=max_len)(next_in)
+
+        class_suff_in = Input(shape=(max_len,))
+        class_suff_emb = Embedding(input_dim=numbers[6], output_dim=100,
+                        input_length=max_len)(class_suff_in)
+
+        concat = concatenate([word_emb, suf_emb, pref_emb, pos_emb, prev_emb, next_emb, class_suff_emb])
         model = Dropout(0.2)(concat)
 
         '''
@@ -467,32 +652,54 @@ class Learner():
         '''
 
         model = Bidirectional(LSTM(units=32,return_sequences=True,recurrent_dropout=0.5,))(model)  # variational biLSTM
+        #model = Bidirectional(LSTM(units=32,return_sequences=True,recurrent_dropout=0.5,))(model)  # variational biLSTM
+        #model = Bidirectional(LSTM(units=32,return_sequences=True,recurrent_dropout=0.5,))(model)  # variational biLSTM
         model = TimeDistributed(Dense(n_labels, activation="relu"))(model)  # a dense layer as suggested by neuralNer
 
         crf = CRF(units=n_labels)  # CRF layer
         out = crf(model)  # output
 
         # create and compile model
-        model = Model([word_in, suf_in, pref_in, pos_in], out)
+        model = Model([word_in, suf_in, pref_in, pos_in, prev_in, next_in, class_suff_in], out)
         return model
 
-    def build_network(self,idx):
+    def build_network(self,idx, embedding_matrix):
+        from keras.optimizers import RMSprop
         '''
         Create network for the learner
         '''
         # sizes
         n_words = len(idx['words'])
+        n_prev = len(idx['prev'])
+        n_next = len(idx['next'])
+        n_pref = len(idx["pref"])
+        n_suff = len(idx["suff"])
+        n_pos = len(idx["position"])
         n_labels = len(idx['labels'])
+        n_class = len(idx["class_suffixes"])
+
+        numbers=[n_words, n_suff, n_pref,n_pos,n_prev, n_next, n_class]
+
         max_len = idx['maxlen']
         # create network layers
-        model = self.defineModel(n_words, n_labels, max_len)
+        model = self.defineModel(numbers, n_labels, max_len, embedding_matrix)
         # set appropriate parameters (optimizer, loss, etc)
-        model.compile(optimizer="rmsprop", loss=crf_loss, metrics=[crf_viterbi_accuracy])
+        optimizer = RMSprop(lr=0.001, epsilon=None, decay=0.0)
+
+        crf = CRF(n_labels, activation='linear')  # CRF layer
+        model.compile(optimizer=optimizer, loss=crf.loss_function, metrics=[crf.accuracy])
         model.summary()
         return model
 
 
 if __name__ == '__main__':
     learner = Learner()
-    learner.learn("../data/train", "../data/devel", "firstmodel")
-    learner.predict("firstmodel", "../data/test", "results.txt")
+    emb_matrix = learner.learn("../data/train", "../data/devel", "firstmodel")
+    print("TRAIN")
+    learner.predict("firstmodel", "../data/train", "results.txt", emb_matrix)
+    print("\nDEVEL")
+    learner.predict("firstmodel", "../data/devel", "results.txt", emb_matrix)
+    print("\nTEST")
+    learner.predict("firstmodel", "../data/test", "results.txt", emb_matrix)
+
+
