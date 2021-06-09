@@ -1,0 +1,372 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+
+import string, sys
+import numpy as np
+import pickle
+
+import matplotlib.pyplot as plt
+import json
+
+import keras as k
+from keras.callbacks import ModelCheckpoint
+from keras_contrib.metrics import crf_viterbi_accuracy
+from keras.models import Model, Input
+from keras.layers import LSTM, Embedding, Dense, TimeDistributed,concatenate,  Dropout, Bidirectional, Lambda, Layer, Conv1D, MaxPooling1D
+from keras_contrib.layers import CRF
+from keras_contrib.losses import crf_loss
+
+sys.path.append("../")
+import evaluator
+
+class Learner():
+    def __init__(self):
+        print("[WELCOME NEURAL NETWORKS DDI]... Init learning progress")
+        # import nltk CoreNLP module (just once)
+
+
+    def load_data(self, path):
+        with open(path) as outfile:
+            data = json.load(outfile)
+        return data
+
+    def create_indexs(self, dataset, max_length):
+        '''
+        Create index dictionaries both for input ( words ) and output ( labels ) from given dataset .
+        '''
+        words = ['<PAD>', '<UNK>']
+        lemmas = ['<PAD>', '<UNK>']
+        tags = ['<PAD>', '<UNK>']
+        labels = []
+        # create reverse index for words, lemmas and tags
+        for data in dataset:
+            dditype = data["dditype"]
+            if dditype not in labels:
+                labels.append(dditype)
+            for word in data["feats"]:
+                feat_word, feat_lemma, feat_tags = word
+                if feat_word not in words:
+                    words.append(feat_word)
+                if feat_lemma not in lemmas:
+                    lemmas.append(feat_lemma)
+                if feat_tags not in tags:
+                    tags.append(feat_tags)
+        words = {k: v for v, k in enumerate(words)}
+        lemmas = {k: v for v, k in enumerate(lemmas)}
+        tags = {k: v for v, k in enumerate(tags)}
+        labels = {k: v for v, k in enumerate(labels)}
+        result = {}
+        result['words'] = words
+        result['lemmas'] = lemmas
+        result['tags'] = tags
+        result['labels'] = labels
+        result['maxlen'] = max_length
+        return result
+
+    def encode_words(self, dataset, idx):
+        '''
+        Encode the words in a sentence dataset formed by lists of tokens
+        into lists of indexes suitable for NN input .
+
+        The dataset encoded as a list of sentence , each of them is a list of
+        word indices . If the word is not in the index , <UNK > code is used . If
+        the sentence is shorter than max_len it is padded with <PAD > code .
+        '''
+
+        def getIndex(feat, index_specific):
+            if feat in index_specific:
+                index = index_specific[feat]
+            else:
+                index = index_specific['<UNK>']
+            return index
+
+        def pad(array, max_len, tag):
+            while len(array) < max_len:
+                array.append(tag)
+            return array
+
+        results_words = []
+        results_lemmas = []
+        results_tags = []
+        for data in dataset:
+            encoded_sentence_words = []
+            encoded_sentence_lemmas = []
+            encoded_sentence_tags = []
+            for word in data['feats']:
+                if len(word) != 3:
+                    print(word)
+                feat_word, feat_lemma, feat_tags = word
+                encoded_sentence_words.append(getIndex(feat_word, idx["words"]))
+                encoded_sentence_lemmas.append(getIndex(feat_lemma, idx["lemmas"]))
+                encoded_sentence_tags.append(getIndex(feat_tags, idx["tags"]))
+
+            encoded_sentence_words = pad(encoded_sentence_words, idx["maxlen"], idx["words"]['<PAD>'])
+            encoded_sentence_lemmas = pad(encoded_sentence_lemmas, idx["maxlen"], idx["lemmas"]['<PAD>'])
+            encoded_sentence_tags = pad(encoded_sentence_tags, idx["maxlen"], idx["tags"]['<PAD>'])
+
+            results_words.append(np.array(encoded_sentence_words))
+            results_lemmas.append(np.array(encoded_sentence_lemmas))
+            results_tags.append(np.array(encoded_sentence_tags))
+        return [np.array(results_words), np.array(results_lemmas), np.array(results_tags)]
+
+    def encode_labels(self, dataset, idx):
+        '''
+        Encode the ground truth labels in a sentence dataset formed by lists of
+        tokens into lists of indexes suitable for NN output .
+        '''
+        results = []
+        for data in dataset:
+            index = idx["labels"][data['dditype']]
+            results.append(np.array(index))
+        n_tags = len(idx["labels"])
+
+        def to_categorical(y, num_classes):
+            return np.eye(num_classes)[y]
+
+        results = [to_categorical(i, num_classes=n_tags) for i in results]
+        results = np.array(results)
+        return results
+
+    def save_model_and_indexs(self, model, idx, filename):
+        '''
+        Save given model and indexs to disk
+        '''
+        model.save_weights(filename + '.hdf5')
+        with open(filename + '.idx', 'wb') as fp:
+            pickle.dump(idx, fp, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def load_model_and_indexs(self, filename):
+        '''
+        Save given model and indexs to disk
+        '''
+        with open(filename + '.idx', 'rb') as fp:
+            data = pickle.load(fp)
+        n_words = len(data['words'])
+        n_labels = len(data['labels'])
+        max_len = data['maxlen']
+        model = self.defineModel(n_words, n_labels, max_len)
+        model.load_weights(filename + '.hdf5')
+        return model, data
+
+    def output_entities(self, dataset, preds, outfile):
+        '''
+        Output detected entities in the format expected by the evaluator
+        '''
+        # if it's not waiting will print the BI elements without the marks
+        # in order to not print the O's or print together the BI
+        wait = False  # while it's waiting will not print the elements
+        name = ''
+        off_start = '0'
+        element = {'name': '', 'offset': '', 'type': ''}
+        f = open(outfile, "w+")
+        for i, (sid, sentence) in enumerate(dataset.items()):
+            for ind, token in enumerate(sentence):
+                curr = preds[i][ind]
+                if curr == 'O' or curr=='<PAD>':  # if it's a O or <PAD> element, we do nothing
+                    wait = True
+                elif ind == (len(sentence) - 1):  # if it's the last element of the sentence
+                    if curr.startswith('B'):
+                        element = {'name': token[0],
+                                   'offset': str(token[1]) + '-' + str(token[2]),
+                                   'type': curr.split('-')[1]  # without B or I
+                                   }
+                    elif curr.startswith('I'):
+                        name = token[0] if name is '' else name + ' ' + token[0]
+                        element = {'name': name,
+                                   'offset': off_start + '-' + str(token[2]),
+                                   'type': curr.split('-')[1]
+                                   }
+                    else:  # only to check
+                        print('There\'s something wrong')
+                    wait = False
+
+                else:
+                    next = preds[i][ind+1]
+                    if curr.startswith('B'):
+                        if next.startswith('O') or next.startswith('B') or next.startswith('<'):
+                            element = {'name': token[0],
+                                       'offset': str(token[1]) + '-' + str(token[2]),
+                                       'type': curr.split('-')[1]  # without B or I
+                                       }
+                            wait = False
+                        elif next.startswith('I'):
+                            name = token[0]
+                            off_start = str(token[1])
+                            wait = True
+                    elif curr.startswith('I'):
+                        if next.startswith('O') or next.startswith('B') or next.startswith('<'):
+                            element = {'name': name + ' ' + token[0],
+                                       'offset': off_start + '-' + str(token[2]),
+                                       'type': curr.split('-')[1]
+                                       }
+                            if name == '':
+                                element["name"] = token[0]
+                            wait = False
+                        elif next.startswith('I'):
+                            name = token[0] if name is '' else name + ' ' + token[0]
+                            wait = True
+                    else:  # only to check
+                        print('There\'s something wrong2')
+
+                if not wait:
+                    f.write(sid + '|' + element['offset'] + '|' + element['name'] + '|' + element['type'] + '\n')
+        f.close()
+
+    def predict(self, modelname, datadir, outfile):
+        '''
+        Loads a NN model from file ’modelname ’ and uses it to extract drugs
+        in datadir . Saves results to ’outfile ’ in the appropriate format .
+        '''
+        print("[INFO]... Model in inference process")
+        # load model and associated encoding data
+        model, idx = self.load_model_and_indexs(modelname)
+        # load data to annotate
+        testdata = self.load_data(datadir)
+        # encode dataset
+        X = self.encode_words(testdata, idx)
+
+        # tag sentences in dataset
+        Y = model.predict(X)
+        reverse_labels= {y: x for x, y in idx['labels'].items()}
+        Y = [[reverse_labels[np.argmax(y)] for y in s] for s in Y]
+        # extract entities and dump them to output file
+        self.output_entities(testdata, Y, outfile)
+
+        # evaluate using official evaluator
+        self.evaluation(datadir, outfile)
+
+    def checkOutputs(self, modelname, datadir, outfile):
+        print("[INFO]... Model in checking process")
+        # load model and associated encoding data
+        model, idx = self.load_model_and_indexs(modelname)
+        # load data to annotate
+        testdata = self.load_data(datadir)
+        # encode dataset
+        Y = self.encode_labels(testdata, idx)
+        print(idx["labels"])
+        reverse_labels = {y: x for x, y in idx['labels'].items()}
+        Y = [[reverse_labels[np.argmax(y)] for y in s] for s in Y]
+        # extract entities and dump them to output file
+        self.output_entities(testdata, Y, outfile)
+
+        # evaluate using official evaluator
+        self.evaluation(datadir, outfile)
+
+    def evaluation(self, datadir, outfile):
+        evaluator.evaluate("NER", datadir, outfile)
+
+    def learn(self, traindir, validationdir, modelname):
+        '''
+        Learns a NN model using traindir as training data , and validationdir
+        as validation data . Saves learnt model in a file named modelname
+        '''
+        print("[INFO]... Model architecture in training process")
+
+        # load train and validation data in a suitable form
+        traindata = self.load_data(traindir)
+        valdata = self.load_data(validationdir)
+
+        # create indexes from training data
+        max_len = 200
+        idx = self.create_indexs(traindata, max_len)
+
+        # build network
+        model = self.build_network(idx)
+
+        # encode datasets
+        Xtrain = self.encode_words(traindata, idx)
+        Ytrain = self.encode_labels(traindata, idx)
+        Xval = self.encode_words(valdata, idx)
+        Yval = self.encode_labels(valdata, idx)
+
+
+        # train model
+        # Saving the best model only
+        filepath = modelname+"-{val_acc:.3f}.hdf5"
+        checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
+        callbacks_list = [checkpoint]
+
+        # Fit the best model
+        history = model.fit(Xtrain, Ytrain, validation_data=(Xval, Yval), batch_size=256, epochs=20, verbose=1, callbacks=callbacks_list)
+
+        # save model and indexs , for later use in prediction
+        self.save_model_and_indexs(model, idx, modelname)
+
+        self.plot(history)
+
+    def plot(self, history):
+        # Plot the graph
+        plt.style.use('ggplot')
+        accuracy = history.history['accuracy']
+        val_accuracy = history.history['val_accuracy']
+        loss = history.history['loss']
+        val_loss = history.history['val_loss']
+        x = range(1, len(accuracy) + 1)
+
+        plt.figure(figsize=(12, 5))
+        plt.subplot(1, 2, 1)
+        plt.plot(x, accuracy, 'b', label='Training acc')
+        plt.plot(x, val_accuracy, 'r', label='Validation acc')
+        plt.title('Training and validation accuracy')
+        plt.legend()
+        plt.subplot(1, 2, 2)
+        plt.plot(x, loss, 'b', label='Training loss')
+        plt.plot(x, val_loss, 'r', label='Validation loss')
+        plt.title('Training and validation loss')
+        plt.legend()
+        plt.savefig("History_model.jpg")
+
+
+
+    def defineModel(self, n_words, n_lemmas, n_tags, n_labels, max_len):
+        word_in = Input(shape=(max_len,))
+        word_emb = Embedding(input_dim=n_words, output_dim=100, input_length=max_len, trainable=True)(
+            word_in)  # 20-dim embedding
+
+        lemma_in = Input(shape=(max_len,))
+        lemma_emb = Embedding(input_dim=n_words, output_dim=100, input_length=max_len)(word_in)
+
+        tags_in = Input(shape=(max_len,))
+        tags_emb = Embedding(input_dim=n_words, output_dim=100, input_length=max_len)(lemma_in)
+
+        concat = concatenate([word_emb, lemma_emb, tags_emb])
+        model = Dropout(0.2)(concat)
+        model = Conv1D(filters=32, kernel_size=3, padding='same', activation='relu')(model)
+        model = MaxPooling1D(pool_size=2)(model)
+        model = LSTM(100)(model)
+        out = Dense(n_labels, activation='softmax')(model)
+
+        # create and compile model
+        model = Model([word_in, lemma_in, tags_in], out)
+
+        return model
+
+    def build_network(self,idx):
+        '''
+        Create network for the learner
+        '''
+        # sizes
+        n_words = len(idx['words'])
+        n_lemmas = len(idx['lemmas'])
+        n_tags = len(idx['tags'])
+
+        n_labels = len(idx['labels'])
+        max_len = idx['maxlen']
+
+        # create network layers
+        model = self.defineModel(n_words, n_lemmas, n_tags, n_labels, max_len)
+
+        # set appropriate parameters (optimizer, loss, etc)
+        model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+        model.summary()
+        return model
+
+
+if __name__ == '__main__':
+    learner = Learner()
+    learner.learn("features_train.txt", "features_devel.txt", "original")
+    #learner.checkOutputs("firstmodel", "../data/test", "results.txt")
+    #learner.predict("firstmodel", "../data/test", "results.txt")
