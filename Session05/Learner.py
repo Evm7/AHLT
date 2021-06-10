@@ -335,14 +335,14 @@ class Learner():
             encoded_sentence = []
             for word in sentence:
                 token = word[0]
-                if token.isupper() or self.check_contains(token, contains_brand):
-                    index = idx["class_suffixes"]['brand']
-                elif self.check_Suffixes(token, suffixes_drug) or self.check_Suffixes(token, suffixes) or self.check_Prefixes(token, prefixes_drug):
+                if self.check_Suffixes(token, suffixes_drug) or self.check_Suffixes(token, suffixes) or self.check_Prefixes(token, prefixes_drug):
                     index = idx["class_suffixes"]['drug']
                 elif self.check_Suffixes(token, suffixes_group) or "agent" in token or self.check_Prefixes(token, prefixes_group) or self.check_contains(token, contains_group):
                     index = idx["class_suffixes"]['group']
                 elif self.check_Prefixes(token, prefixes_drug_n) or self.check_contains(token, contains_drug_n):
                     index = idx["class_suffixes"]['drug_n']
+                elif token.isupper() or self.check_contains(token, contains_brand):
+                    index = idx["class_suffixes"]['brand']
                 else:
                     index = idx["class_suffixes"]['none']
                 encoded_sentence.append(index)
