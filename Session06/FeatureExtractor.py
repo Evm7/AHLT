@@ -83,7 +83,7 @@ class FeaturesExtractor():
         for index, (k, v) in enumerate(sentence.items()):
             if v in ["<DRUG_1>", "<DRUG_2>", "<DRUG_OTHERS>"]:
                 feat_ = (v, )*num_feats
-                feat_ + (pos1-index, pos2-index)
+                feat_ = feat_ + (pos1-index, pos2-index)
                 feats.append(feat_)
 
             else:
