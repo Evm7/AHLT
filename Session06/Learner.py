@@ -14,7 +14,7 @@ import keras as k
 from keras.callbacks import ModelCheckpoint
 from keras_contrib.metrics import crf_viterbi_accuracy
 from keras.models import Model, Input
-from keras.layers import LSTM, Embedding, Dense, TimeDistributed,concatenate,  Dropout, Bidirectional, Lambda, Layer, Conv1D, MaxPooling1D
+from keras.layers import LSTM, Embedding, Dense, TimeDistributed,concatenate,  Dropout, Bidirectional, Lambda, Layer, Conv1D, MaxPooling1D, Flatten
 from keras_contrib.layers import CRF
 from keras_contrib.losses import crf_loss
 
@@ -322,6 +322,7 @@ class Learner():
 
     def plot(self, history):
         # Plot the graph
+        print(history.history)
         plt.style.use('ggplot')
         accuracy = history.history['accuracy']
         val_accuracy = history.history['val_accuracy']
@@ -365,12 +366,16 @@ class Learner():
         model = Dropout(0.2)(concat)
         model = Conv1D(filters=32, kernel_size=3, padding='same', activation='relu')(model)
         model = MaxPooling1D(pool_size=2)(model)
-        model = LSTM(100)(model)
+        model = Bidirectional(LSTM(units=32,return_sequences=True,recurrent_dropout=0.5,))(model)  # variational biLSTM
+        #model = Flatten()(model))
+        #model = LSTM(100)(model)
         out = Dense(n_labels, activation='softmax')(model)
+
+        #out = TimeDistributed(Dense(n_labels, activation="softmax"))(model)  # a dense layer as suggested by neuralNer
+
 
         # create and compile model
         model = Model([word_in, lemma_in, tags_in, pos1_in, pos2_in], out)
-
         return model
 
     def build_network(self,idx):
@@ -384,7 +389,7 @@ class Learner():
         n_pos1 = len(idx['rel_pos1'])
         n_pos2 = len(idx['rel_pos2'])
         input_dim = max(n_words, n_lemmas, n_tags, n_pos1, n_pos2)
-        
+
         n_labels = len(idx['labels'])
         max_len = idx['maxlen']
 
