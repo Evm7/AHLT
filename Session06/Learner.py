@@ -39,6 +39,9 @@ class Learner():
         words = ['<PAD>', '<UNK>']
         lemmas = ['<PAD>', '<UNK>']
         tags = ['<PAD>', '<UNK>']
+        rel_pos1 = ['<PAD>', '<UNK>']
+        rel_pos2 = ['<PAD>', '<UNK>']
+
         labels = []
         # create reverse index for words, lemmas and tags
         for data in dataset:
@@ -46,21 +49,30 @@ class Learner():
             if dditype not in labels:
                 labels.append(dditype)
             for word in data["feats"]:
-                feat_word, feat_lemma, feat_tags = word
+                feat_word, feat_lemma, feat_tags, feat_pos1, feat_pos2 = word
                 if feat_word not in words:
                     words.append(feat_word)
                 if feat_lemma not in lemmas:
                     lemmas.append(feat_lemma)
                 if feat_tags not in tags:
                     tags.append(feat_tags)
+                if feat_pos1 not in rel_pos1:
+                    rel_pos1.append(feat_pos1)
+                if feat_pos2 not in rel_pos2:
+                    rel_pos2.append(feat_pos2)
         words = {k: v for v, k in enumerate(words)}
         lemmas = {k: v for v, k in enumerate(lemmas)}
         tags = {k: v for v, k in enumerate(tags)}
+        rel_pos1 = {k: v for v, k in enumerate(rel_pos1)}
+        rel_pos2 = {k: v for v, k in enumerate(rel_pos2)}
         labels = {k: v for v, k in enumerate(labels)}
+
         result = {}
         result['words'] = words
         result['lemmas'] = lemmas
         result['tags'] = tags
+        result['rel_pos1'] = rel_pos1
+        result['rel_pos2'] = rel_pos2
         result['labels'] = labels
         result['maxlen'] = max_length
         return result
@@ -90,26 +102,38 @@ class Learner():
         results_words = []
         results_lemmas = []
         results_tags = []
+        results_pos1 = []
+        results_pos2 = []
+
         for data in dataset:
             encoded_sentence_words = []
             encoded_sentence_lemmas = []
             encoded_sentence_tags = []
+            encoded_sentence_pos_1 = []
+            encoded_sentence_pos_2 = []
             for word in data['feats']:
-                if len(word) != 3:
+                if len(word) != 5:
                     print(word)
-                feat_word, feat_lemma, feat_tags = word
+                feat_word, feat_lemma, feat_tags, feat_pos_1, feat_pos_2 = word
                 encoded_sentence_words.append(getIndex(feat_word, idx["words"]))
                 encoded_sentence_lemmas.append(getIndex(feat_lemma, idx["lemmas"]))
                 encoded_sentence_tags.append(getIndex(feat_tags, idx["tags"]))
+                encoded_sentence_pos_1.append(getIndex(feat_pos_1, idx["rel_pos1"]))
+                encoded_sentence_pos_2.append(getIndex(feat_pos_2, idx["rel_pos2"]))
 
             encoded_sentence_words = pad(encoded_sentence_words, idx["maxlen"], idx["words"]['<PAD>'])
             encoded_sentence_lemmas = pad(encoded_sentence_lemmas, idx["maxlen"], idx["lemmas"]['<PAD>'])
             encoded_sentence_tags = pad(encoded_sentence_tags, idx["maxlen"], idx["tags"]['<PAD>'])
+            encoded_sentence_pos_1 = pad(encoded_sentence_pos_1, idx["maxlen"], idx["rel_pos1"]['<PAD>'])
+            encoded_sentence_pos_2 = pad(encoded_sentence_pos_2, idx["maxlen"], idx["rel_pos2"]['<PAD>'])
 
             results_words.append(np.array(encoded_sentence_words))
             results_lemmas.append(np.array(encoded_sentence_lemmas))
             results_tags.append(np.array(encoded_sentence_tags))
-        return [np.array(results_words), np.array(results_lemmas), np.array(results_tags)]
+            results_pos1.append(np.array(encoded_sentence_pos_1))
+            results_pos2.append(np.array(encoded_sentence_pos_2))
+
+        return [np.array(results_words), np.array(results_lemmas), np.array(results_tags), np.array(results_pos1), np.array(results_pos2)]
 
     def encode_labels(self, dataset, idx):
         '''
@@ -320,18 +344,24 @@ class Learner():
 
 
 
-    def defineModel(self, n_words, n_lemmas, n_tags, n_labels, max_len):
+    def defineModel(self, input_dim, n_labels, max_len):
         word_in = Input(shape=(max_len,))
-        word_emb = Embedding(input_dim=n_words, output_dim=100, input_length=max_len, trainable=True)(
+        word_emb = Embedding(input_dim=input_dim, output_dim=100, input_length=max_len, trainable=True)(
             word_in)  # 20-dim embedding
 
         lemma_in = Input(shape=(max_len,))
-        lemma_emb = Embedding(input_dim=n_words, output_dim=100, input_length=max_len)(word_in)
+        lemma_emb = Embedding(input_dim=input_dim, output_dim=100, input_length=max_len)(word_in)
 
         tags_in = Input(shape=(max_len,))
-        tags_emb = Embedding(input_dim=n_words, output_dim=100, input_length=max_len)(lemma_in)
+        tags_emb = Embedding(input_dim=input_dim, output_dim=100, input_length=max_len)(lemma_in)
 
-        concat = concatenate([word_emb, lemma_emb, tags_emb])
+        pos1_in = Input(shape=(max_len,))
+        pos1_emb = Embedding(input_dim=input_dim, output_dim=100, input_length=max_len)(tags_in)
+
+        pos2_in = Input(shape=(max_len,))
+        pos2_emb = Embedding(input_dim=input_dim, output_dim=100, input_length=max_len)(pos1_in)
+
+        concat = concatenate([word_emb, lemma_emb, tags_emb, pos1_emb, pos2_emb])
         model = Dropout(0.2)(concat)
         model = Conv1D(filters=32, kernel_size=3, padding='same', activation='relu')(model)
         model = MaxPooling1D(pool_size=2)(model)
@@ -339,7 +369,7 @@ class Learner():
         out = Dense(n_labels, activation='softmax')(model)
 
         # create and compile model
-        model = Model([word_in, lemma_in, tags_in], out)
+        model = Model([word_in, lemma_in, tags_in, pos1_in, pos2_in], out)
 
         return model
 
@@ -351,12 +381,15 @@ class Learner():
         n_words = len(idx['words'])
         n_lemmas = len(idx['lemmas'])
         n_tags = len(idx['tags'])
-
+        n_pos1 = len(idx['rel_pos1'])
+        n_pos2 = len(idx['rel_pos2'])
+        input_dim = max(n_words, n_lemmas, n_tags, n_pos1, n_pos2)
+        
         n_labels = len(idx['labels'])
         max_len = idx['maxlen']
 
         # create network layers
-        model = self.defineModel(n_words, n_lemmas, n_tags, n_labels, max_len)
+        model = self.defineModel(input_dim, n_labels, max_len)
 
         # set appropriate parameters (optimizer, loss, etc)
         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
