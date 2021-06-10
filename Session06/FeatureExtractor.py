@@ -4,7 +4,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 from os import listdir
-
+import collections
 
 import json, pathlib
 
@@ -53,6 +53,8 @@ class FeaturesExtractor():
 
         sentence = {k:v['word'] for k,v in nodes.items()}
         sentence.pop(0) # remove general root, as do not belong to the sentence
+        sentence = collections.OrderedDict(sorted(sentence.items()))
+
         # Type of Entity as features
         feat["type1"] = entities[e1]["type"]
         feat["type2"] = entities[e2]["type"]
