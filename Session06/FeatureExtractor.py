@@ -1,31 +1,13 @@
-import nltk
-from nltk.corpus import stopwords
 from xml.dom.minidom import parse
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-import keras as k
 
-from nltk.tokenize import word_tokenize
 from os import listdir
-import string, sys
-import numpy as np
-import pickle
-from keras.utils import to_categorical
-from keras.callbacks import ModelCheckpoint
-from keras_contrib.metrics import crf_viterbi_accuracy
-import matplotlib.pyplot as plt
-from keras import backend as K
+
+
 import json, pathlib
 
-from keras.models import Model, Input
-from keras.layers import LSTM, Embedding, Dense, TimeDistributed, Dropout, Bidirectional, Lambda, Layer
-from keras_contrib.layers import CRF
-from keras_contrib.losses import crf_loss
-from keras_contrib.metrics import crf_accuracy
-
-sys.path.append("../")
-import evaluator
 
 class FeaturesExtractor():
     def __init__(self):
@@ -70,7 +52,7 @@ class FeaturesExtractor():
         nodes = analysis.nodes
 
         sentence = {k:v['word'] for k,v in nodes.items()}
-
+        sentence.pop(0) # remove general root, as do not belong to the sentence
         # Type of Entity as features
         feat["type1"] = entities[e1]["type"]
         feat["type2"] = entities[e2]["type"]
@@ -81,28 +63,38 @@ class FeaturesExtractor():
         # If entities can not be retrieved, no DDI --> null
         if len(entity1) < 1 or len(entity2) < 1:
             return "error"
-        # mask sentence
-        sentence = self.mask(sentence, entity1, "<DRUG_1>")
-        sentence = self.mask(sentence, entity2, "<DRUG_2>")
 
         id_others = self.differ([e1, e2], list(entities.keys()))
         other_entities = [self.getNodes_Individual(nodes, entities, id_) for id_ in id_others]
         if len(other_entities)>0:
             sentence = self.mask(sentence, other_entities[0], "<DRUG_OTHERS>")
 
+        # mask sentence
+        sentence = self.mask(sentence, entity1, "<DRUG_1>")
+        sentence = self.mask(sentence, entity2, "<DRUG_2>")
+
+
+        pos1, pos2 = self.relPositions(sentence)
+
         feats = []
-        num_feats = 3 # word, lemma, tag
-        for k, v in sentence.items():
+        num_feats = 3 # (word, lemma, tag) + (pos_to_1, pos_to_2)
+        for index, (k, v) in enumerate(sentence.items()):
             if v in ["<DRUG_1>", "<DRUG_2>", "<DRUG_OTHERS>"]:
                 feat_ = (v, )*num_feats
+                feat_ + (pos1-index, pos2-index)
                 feats.append(feat_)
 
             else:
                 nd = nodes[k]
                 if nd["word"] is not None:
-                    feat_ = (nd['word'], nd['lemma'], nd['tag'])
+                    feat_ = (nd['word'], nd['lemma'], nd['tag'], pos1-index, pos2-index)
                     feats.append(feat_)
         return feats
+
+    def relPositions(self, sentence):
+        pos1 = list(sentence.values()).index("<DRUG_1>")
+        pos2 = list(sentence.values()).index("<DRUG_2>")
+        return pos1, pos2
 
     def mask(self, sentence, entity, tag):
         for ent in entity:
@@ -211,7 +203,6 @@ class FeaturesExtractor():
                         data.append(self.createCase(sid, id_e1, id_e2, dditype, feats))
             if not (i % int(length / 10)):
                 print("[INFO] " + str(int(i / length * 100)) + "% complete.", flush=True)
-        print(data)
         with open('features_'+pathlib.Path(datadir).stem+'.txt', 'w') as outfile:
             json.dump(data, outfile)
         return data
@@ -230,14 +221,16 @@ class FeaturesExtractor():
         Learns a NN model using traindir as training data , and validationdir
         as validation data . Saves learnt model in a file named modelname
         '''
-        print("[INFO]... Model architecture in training process")
-
-        # load train and validation data in a suitable form
+        print("[INFO]... Extracting information from the training dataset")
         traindata = self.load_data(traindir)
+
+        print("[INFO]... Extracting information from the training dataset")
         valdata = self.load_data(validationdir)
+
+        print("[INFO]... Extracting information from the training dataset")
         testdata = self.load_data(test_dir)
 
-
+        return traindata, valdata, testdata
 
 
 if __name__ == '__main__':
