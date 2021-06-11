@@ -1,7 +1,10 @@
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-
+from numpy.random import seed
+seed(42)
+from tensorflow import set_random_seed
+set_random_seed(42)
 
 import string, sys
 import numpy as np
@@ -171,7 +174,7 @@ class Learner():
         n_labels = len(data['labels'])
         max_len = data['maxlen']
         model = self.defineModel(n_words, n_labels, max_len)
-        model.load_weights(filename + '.hdf5')
+        model.load_weights(filename + '-0.886.hdf5')
         return model, data
 
     def output_interactions(self, dataset, preds, outfile):
@@ -237,7 +240,7 @@ class Learner():
     def evaluation(self, datadir, outfile):
         evaluator.evaluate("DDI", datadir, outfile)
 
-    def learn(self, traindir, validationdir, modelname, finetune=False):
+    def learn(self, traindir, validationdir, modelname, finetune=""):
         '''
         Learns a NN model using traindir as training data , and validationdir
         as validation data . Saves learnt model in a file named modelname
@@ -248,14 +251,18 @@ class Learner():
         traindata = self.load_data(traindir)
         valdata = self.load_data(validationdir)
 
+        if finetune=="":
+            # create indexes from training data
+            max_len = 200
+            idx = self.create_indexs(traindata, max_len)
 
-        # create indexes from training data
-        max_len = 200
-        idx = self.create_indexs(traindata, max_len)
+            # build network
+            model = self.build_network(idx)
+        else:
+            model, idx = self.load_model_and_indexs(finetune)
+            model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
-        # build network
-        model = self.build_network(idx)
-
+        model.summary()
         # encode datasets
         Xtrain = self.encode_words(traindata, idx)
         Ytrain = self.encode_labels(traindata, idx)
@@ -270,7 +277,7 @@ class Learner():
         callbacks_list = [checkpoint]
 
         # Fit the best model
-        history = model.fit(Xtrain, Ytrain, validation_data=(Xval, Yval), batch_size=256, epochs=10, verbose=1, callbacks=callbacks_list)
+        history = model.fit(Xtrain, Ytrain, validation_data=(Xval, Yval), batch_size=256, epochs=15, verbose=1, callbacks=callbacks_list)
 
         # save model and indexs , for later use in prediction
         self.save_model_and_indexs(model, idx, modelname)
@@ -281,8 +288,8 @@ class Learner():
         # Plot the graph
         print(history.history)
         plt.style.use('ggplot')
-        accuracy = history.history['accuracy']
-        val_accuracy = history.history['val_accuracy']
+        accuracy = history.history['acc']
+        val_accuracy = history.history['val_acc']
         loss = history.history['loss']
         val_loss = history.history['val_loss']
         x = range(1, len(accuracy) + 1)
@@ -320,10 +327,10 @@ class Learner():
         pos2_emb = Embedding(input_dim=input_dim, output_dim=100, input_length=max_len)(pos1_in)
 
         concat = concatenate([word_emb, lemma_emb, tags_emb, pos1_emb, pos2_emb])
-        model = Dropout(0.2)(concat)
+        model = Dropout(0.55)(concat)
         model = Conv1D(128, 5, padding='same', activation='relu')(model)
         model = MaxPooling1D(pool_size=2)(model)
-        model = Bidirectional(LSTM(units=100,return_sequences=False,recurrent_dropout=0.5,))(model)  # variational biLSTM
+        model = Bidirectional(LSTM(units=100,return_sequences=False,recurrent_dropout=0.3,))(model)  # variational biLSTM
         #model = Flatten()(model))
         #model = LSTM(100)(model)
         out = Dense(n_labels, activation='softmax')(model)
@@ -362,6 +369,7 @@ class Learner():
 
 if __name__ == '__main__':
     learner = Learner()
-    #learner.learn("features_train.txt", "features_devel.txt", "adecuate")
+    learner.learn("features_train.txt", "features_devel.txt", "definitive")
+    #learner.learn("features_train.txt", "features_devel.txt", "adecuate_2",  "adecuate")
     #learner.checkOutputs("original", "../data/train", "results.txt")
-    learner.predict("adecuate", "../data/test", "results.txt")
+    #learner.predict("adecuate_2", "../data/test", "results.txt")
