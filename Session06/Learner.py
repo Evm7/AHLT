@@ -181,10 +181,7 @@ class Learner():
         # if it's not waiting will print the BI elements without the marks
         # in order to not print the O's or print together the BI
         f = open(outfile, "w+")
-        print(dataset[0])
-        print(preds[0])
-        print(len(dataset[0]['feats']))
-        print(len(preds[0]))
+
         for i, pair in enumerate(dataset):
             sid= pair['sid']
             e1 = pair['id_e1']
@@ -228,7 +225,6 @@ class Learner():
         testdata = self.load_data(filename)
         # encode dataset
         Y = self.encode_labels(testdata, idx)
-        print(idx["labels"])
         reverse_labels = {y: x for x, y in idx['labels'].items()}
         Y = [reverse_labels[np.argmax(s)] for s in Y]
 
@@ -241,7 +237,7 @@ class Learner():
     def evaluation(self, datadir, outfile):
         evaluator.evaluate("DDI", datadir, outfile)
 
-    def learn(self, traindir, validationdir, modelname):
+    def learn(self, traindir, validationdir, modelname, finetune=False):
         '''
         Learns a NN model using traindir as training data , and validationdir
         as validation data . Saves learnt model in a file named modelname
@@ -251,6 +247,7 @@ class Learner():
         # load train and validation data in a suitable form
         traindata = self.load_data(traindir)
         valdata = self.load_data(validationdir)
+
 
         # create indexes from training data
         max_len = 200
@@ -365,6 +362,6 @@ class Learner():
 
 if __name__ == '__main__':
     learner = Learner()
-    learner.learn("features_train.txt", "features_devel.txt", "adecuate")
+    #learner.learn("features_train.txt", "features_devel.txt", "adecuate")
     #learner.checkOutputs("original", "../data/train", "results.txt")
-    #learner.predict("original", "../data/test", "results.txt")
+    learner.predict("adecuate", "../data/test", "results.txt")
