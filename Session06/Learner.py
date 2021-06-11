@@ -1,10 +1,12 @@
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
-warnings.filterwarnings("ignore", category=DeprecationWarning)
 from numpy.random import seed
 seed(42)
 from tensorflow import set_random_seed
 set_random_seed(42)
+
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 
 import string, sys
 import numpy as np
@@ -174,7 +176,7 @@ class Learner():
         n_labels = len(data['labels'])
         max_len = data['maxlen']
         model = self.defineModel(n_words, n_labels, max_len)
-        model.load_weights(filename + '-0.886.hdf5')
+        model.load_weights(filename + '.hdf5')
         return model, data
 
     def output_interactions(self, dataset, preds, outfile):
@@ -240,7 +242,7 @@ class Learner():
     def evaluation(self, datadir, outfile):
         evaluator.evaluate("DDI", datadir, outfile)
 
-    def learn(self, traindir, validationdir, modelname, finetune=""):
+    def learn(self, traindir, validationdir, modelname, finetune=False):
         '''
         Learns a NN model using traindir as training data , and validationdir
         as validation data . Saves learnt model in a file named modelname
@@ -251,24 +253,43 @@ class Learner():
         traindata = self.load_data(traindir)
         valdata = self.load_data(validationdir)
 
-        if finetune=="":
-            # create indexes from training data
-            max_len = 200
-            idx = self.create_indexs(traindata, max_len)
 
-            # build network
-            model = self.build_network(idx)
-        else:
-            model, idx = self.load_model_and_indexs(finetune)
-            model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+        # create indexes from training data
+        max_len = 200
+        idx = self.create_indexs(traindata, max_len)
 
-        model.summary()
+        n_words=len(idx['words'])
+        # load the whole embedding into memory
+        embeddings_index = dict()
+        f = open('../data/glove.6B/glove.6B.100d.txt', encoding="utf8")
+        for line in f:
+            values = line.split()
+            word = values[0]
+            coefs = np.asarray(values[1:], dtype='float32')
+            embeddings_index[word] = coefs
+        f.close()
+        
+        embedding_matrix = np.zeros((n_words, 100))
+        h=0
+        for word in idx['words']:
+            embedding_vector = embeddings_index.get(word)
+            if embedding_vector is not None:
+                embedding_matrix[h] = embedding_vector
+            h+=1
+
+        f = open("./embedding_matrix.txt", 'w')
+        for row in embedding_matrix:
+            np.savetxt(f,row)
+        f.close()
+
+        # build network
+        model = self.build_network(idx)
+
         # encode datasets
         Xtrain = self.encode_words(traindata, idx)
         Ytrain = self.encode_labels(traindata, idx)
         Xval = self.encode_words(valdata, idx)
         Yval = self.encode_labels(valdata, idx)
-
 
         # train model
         # Saving the best model only
@@ -277,7 +298,7 @@ class Learner():
         callbacks_list = [checkpoint]
 
         # Fit the best model
-        history = model.fit(Xtrain, Ytrain, validation_data=(Xval, Yval), batch_size=256, epochs=15, verbose=1, callbacks=callbacks_list)
+        history = model.fit(Xtrain, Ytrain, validation_data=(Xval, Yval), batch_size=256, epochs=20, verbose=1, callbacks=callbacks_list)
 
         # save model and indexs , for later use in prediction
         self.save_model_and_indexs(model, idx, modelname)
@@ -310,8 +331,11 @@ class Learner():
 
 
     def defineModel(self, input_dim, n_labels, max_len):
+
+        embedding_matrix=np.loadtxt("./embedding_matrix.txt").reshape(input_dim, 100)
+
         word_in = Input(shape=(max_len,))
-        word_emb = Embedding(input_dim=input_dim, output_dim=100, input_length=max_len, trainable=True)(
+        word_emb = Embedding(input_dim=input_dim, output_dim=100, input_length=max_len, trainable=False, weights=[embedding_matrix])(
             word_in)  # 20-dim embedding
 
         lemma_in = Input(shape=(max_len,))
@@ -369,7 +393,11 @@ class Learner():
 
 if __name__ == '__main__':
     learner = Learner()
-    learner.learn("features_train.txt", "features_devel.txt", "definitive")
-    #learner.learn("features_train.txt", "features_devel.txt", "adecuate_2",  "adecuate")
+    learner.learn("features_train.txt", "features_devel.txt", "adecuate")
     #learner.checkOutputs("original", "../data/train", "results.txt")
-    #learner.predict("adecuate_2", "../data/test", "results.txt")
+    print("TRAIN")
+    learner.predict("adecuate", "../data/train", "results.txt")
+    print("\nDEVEL")
+    learner.predict("adecuate", "../data/devel", "results.txt")
+    print("\nTEST")
+    learner.predict("adecuate", "../data/test", "results.txt")
