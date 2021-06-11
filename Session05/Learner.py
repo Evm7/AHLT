@@ -380,7 +380,7 @@ class Learner():
         with open(filename + '.idx', 'wb') as fp:
             pickle.dump(idx, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def load_model_and_indexs(self, filename, embedding_matrix):
+    def load_model_and_indexs(self, filename):
         '''
         Save given model and indexs to disk
         '''
@@ -399,7 +399,7 @@ class Learner():
 
         numbers=[n_words, n_suff, n_pref,n_pos,n_prev, n_next, n_class]
 
-        model = self.defineModel(numbers, n_labels, max_len, embedding_matrix)
+        model = self.defineModel(numbers, n_labels, max_len)
         model.load_weights(filename + '.h5')
         return model, data
 
@@ -467,14 +467,14 @@ class Learner():
                     f.write(sid + '|' + element['offset'] + '|' + element['name'] + '|' + element['type'] + '\n')
         f.close()
 
-    def predict(self, modelname, datadir, outfile, embedding_matrix):
+    def predict(self, modelname, datadir, outfile):
         '''
         Loads a NN model from file ’modelname ’ and uses it to extract drugs
         in datadir . Saves results to ’outfile ’ in the appropriate format .
         '''
         print("[INFO]... Model in inference process")
         # load model and associated encoding data
-        model, idx = self.load_model_and_indexs(modelname, embedding_matrix)
+        model, idx = self.load_model_and_indexs(modelname)
         # load data to annotate
         testdata = self.load_data(datadir)
         # encode dataset
@@ -496,10 +496,10 @@ class Learner():
         # evaluate using official evaluator
         self.evaluation(datadir, outfile)
 
-    def checkOutputs(self, modelname, datadir, outfile, embedding_matrix):
+    def checkOutputs(self, modelname, datadir, outfile):
         print("[INFO]... Model in checking process")
         # load model and associated encoding data
-        model, idx = self.load_model_and_indexs(modelname, embedding_matrix)
+        model, idx = self.load_model_and_indexs(modelname)
         # load data to annotate
         testdata = self.load_data(datadir)
         # encode dataset
@@ -569,9 +569,15 @@ class Learner():
             if embedding_vector is not None:
                 embedding_matrix[h] = embedding_vector
             h+=1
+
+        f = open("./embedding_matrix.txt", 'w')
+        for row in embedding_matrix:
+            np.savetxt(f,row)
+        f.close()
+
         # train model
         # build network
-        model = self.build_network(idx, embedding_matrix)
+        model = self.build_network(idx)
 
         # Saving the best model only
         filepath = modelname+"-{val_crf_viterbi_accuracy:.3f}.hdf5"
@@ -612,7 +618,10 @@ class Learner():
         plt.legend()
         plt.savefig("History_model.jpg")
 
-    def defineModel(self, numbers, n_labels, max_len, embedding_matrix):
+    def defineModel(self, numbers, n_labels, max_len):
+
+        embedding_matrix=np.loadtxt("./embedding_matrix.txt").reshape(numbers[0], 100)
+
         word_in = Input(shape=(max_len,))
         word_emb = Embedding(input_dim=numbers[0], output_dim=100, input_length=max_len, trainable=False, weights = [embedding_matrix])(word_in)  # 20-dim embedding
         
@@ -663,7 +672,7 @@ class Learner():
         model = Model([word_in, suf_in, pref_in, pos_in, prev_in, next_in, class_rules_in], out)
         return model
 
-    def build_network(self,idx, embedding_matrix):
+    def build_network(self,idx):
         from keras.optimizers import RMSprop
         '''
         Create network for the learner
@@ -682,7 +691,7 @@ class Learner():
 
         max_len = idx['maxlen']
         # create network layers
-        model = self.defineModel(numbers, n_labels, max_len, embedding_matrix)
+        model = self.defineModel(numbers, n_labels, max_len)
         # set appropriate parameters (optimizer, loss, etc)
         optimizer = RMSprop(lr=0.001, epsilon=None, decay=0.0)
 
@@ -694,12 +703,11 @@ class Learner():
 
 if __name__ == '__main__':
     learner = Learner()
-    emb_matrix = learner.learn("../data/train", "../data/devel", "firstmodel")
+    learner.learn("../data/train", "../data/devel", "firstmodel")
     #learner.checkOutputs("firstmodel", "../data/test", "results.txt", emb_matrix)
     print("TRAIN")
-    learner.predict("firstmodel", "../data/train", "results.txt", emb_matrix)
+    learner.predict("firstmodel", "../data/train", "results.txt")
     print("\nDEVEL")
-    learner.predict("firstmodel", "../data/devel", "results.txt", emb_matrix)
+    learner.predict("firstmodel", "../data/devel", "results.txt")
     print("\nTEST")
-    learner.predict("firstmodel", "../data/test", "results.txt", emb_matrix)
-
+    learner.predict("firstmodel", "../data/test", "results.txt")
