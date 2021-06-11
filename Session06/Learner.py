@@ -8,7 +8,7 @@ import numpy as np
 import pickle
 
 import matplotlib.pyplot as plt
-import json
+import json, pathlib
 
 import keras as k
 from keras.callbacks import ModelCheckpoint
@@ -174,68 +174,24 @@ class Learner():
         model.load_weights(filename + '.hdf5')
         return model, data
 
-    def output_entities(self, dataset, preds, outfile):
+    def output_interactions(self, dataset, preds, outfile):
         '''
         Output detected entities in the format expected by the evaluator
         '''
         # if it's not waiting will print the BI elements without the marks
         # in order to not print the O's or print together the BI
-        wait = False  # while it's waiting will not print the elements
-        name = ''
-        off_start = '0'
-        element = {'name': '', 'offset': '', 'type': ''}
         f = open(outfile, "w+")
-        for i, (sid, sentence) in enumerate(dataset.items()):
-            for ind, token in enumerate(sentence):
-                curr = preds[i][ind]
-                if curr == 'O' or curr=='<PAD>':  # if it's a O or <PAD> element, we do nothing
-                    wait = True
-                elif ind == (len(sentence) - 1):  # if it's the last element of the sentence
-                    if curr.startswith('B'):
-                        element = {'name': token[0],
-                                   'offset': str(token[1]) + '-' + str(token[2]),
-                                   'type': curr.split('-')[1]  # without B or I
-                                   }
-                    elif curr.startswith('I'):
-                        name = token[0] if name is '' else name + ' ' + token[0]
-                        element = {'name': name,
-                                   'offset': off_start + '-' + str(token[2]),
-                                   'type': curr.split('-')[1]
-                                   }
-                    else:  # only to check
-                        print('There\'s something wrong')
-                    wait = False
-
-                else:
-                    next = preds[i][ind+1]
-                    if curr.startswith('B'):
-                        if next.startswith('O') or next.startswith('B') or next.startswith('<'):
-                            element = {'name': token[0],
-                                       'offset': str(token[1]) + '-' + str(token[2]),
-                                       'type': curr.split('-')[1]  # without B or I
-                                       }
-                            wait = False
-                        elif next.startswith('I'):
-                            name = token[0]
-                            off_start = str(token[1])
-                            wait = True
-                    elif curr.startswith('I'):
-                        if next.startswith('O') or next.startswith('B') or next.startswith('<'):
-                            element = {'name': name + ' ' + token[0],
-                                       'offset': off_start + '-' + str(token[2]),
-                                       'type': curr.split('-')[1]
-                                       }
-                            if name == '':
-                                element["name"] = token[0]
-                            wait = False
-                        elif next.startswith('I'):
-                            name = token[0] if name is '' else name + ' ' + token[0]
-                            wait = True
-                    else:  # only to check
-                        print('There\'s something wrong2')
-
-                if not wait:
-                    f.write(sid + '|' + element['offset'] + '|' + element['name'] + '|' + element['type'] + '\n')
+        print(dataset[0])
+        print(preds[0])
+        print(len(dataset[0]['feats']))
+        print(len(preds[0]))
+        for i, pair in enumerate(dataset):
+            sid= pair['sid']
+            e1 = pair['id_e1']
+            e2 = pair['id_e2']
+            type_pred = preds[i]
+            if type_pred != "null":
+                f.write(sid + '|' + e1 + '|' +e2 + '|' + type_pred + '\n')
         f.close()
 
     def predict(self, modelname, datadir, outfile):
@@ -247,16 +203,18 @@ class Learner():
         # load model and associated encoding data
         model, idx = self.load_model_and_indexs(modelname)
         # load data to annotate
-        testdata = self.load_data(datadir)
+        filename = "features_"+ pathlib.Path(datadir).stem+".txt"
+        testdata = self.load_data(filename)
         # encode dataset
         X = self.encode_words(testdata, idx)
 
         # tag sentences in dataset
         Y = model.predict(X)
+        #[s.numpy().argmax() for s in y_val_pred]
         reverse_labels= {y: x for x, y in idx['labels'].items()}
-        Y = [[reverse_labels[np.argmax(y)] for y in s] for s in Y]
+        Y = [reverse_labels[np.argmax(s)] for s in Y]
         # extract entities and dump them to output file
-        self.output_entities(testdata, Y, outfile)
+        self.output_interactions(testdata, Y, outfile)
 
         # evaluate using official evaluator
         self.evaluation(datadir, outfile)
@@ -266,20 +224,22 @@ class Learner():
         # load model and associated encoding data
         model, idx = self.load_model_and_indexs(modelname)
         # load data to annotate
-        testdata = self.load_data(datadir)
+        filename = "features_"+ pathlib.Path(datadir).stem+".txt"
+        testdata = self.load_data(filename)
         # encode dataset
         Y = self.encode_labels(testdata, idx)
         print(idx["labels"])
         reverse_labels = {y: x for x, y in idx['labels'].items()}
-        Y = [[reverse_labels[np.argmax(y)] for y in s] for s in Y]
+        Y = [reverse_labels[np.argmax(s)] for s in Y]
+
         # extract entities and dump them to output file
-        self.output_entities(testdata, Y, outfile)
+        self.output_interactions(testdata, Y, outfile)
 
         # evaluate using official evaluator
         self.evaluation(datadir, outfile)
 
     def evaluation(self, datadir, outfile):
-        evaluator.evaluate("NER", datadir, outfile)
+        evaluator.evaluate("DDI", datadir, outfile)
 
     def learn(self, traindir, validationdir, modelname):
         '''
@@ -313,7 +273,7 @@ class Learner():
         callbacks_list = [checkpoint]
 
         # Fit the best model
-        history = model.fit(Xtrain, Ytrain, validation_data=(Xval, Yval), batch_size=256, epochs=20, verbose=1, callbacks=callbacks_list)
+        history = model.fit(Xtrain, Ytrain, validation_data=(Xval, Yval), batch_size=256, epochs=10, verbose=1, callbacks=callbacks_list)
 
         # save model and indexs , for later use in prediction
         self.save_model_and_indexs(model, idx, modelname)
@@ -364,9 +324,9 @@ class Learner():
 
         concat = concatenate([word_emb, lemma_emb, tags_emb, pos1_emb, pos2_emb])
         model = Dropout(0.2)(concat)
-        model = Conv1D(filters=32, kernel_size=3, padding='same', activation='relu')(model)
+        model = Conv1D(128, 5, padding='same', activation='relu')(model)
         model = MaxPooling1D(pool_size=2)(model)
-        model = Bidirectional(LSTM(units=32,return_sequences=True,recurrent_dropout=0.5,))(model)  # variational biLSTM
+        model = Bidirectional(LSTM(units=100,return_sequences=False,recurrent_dropout=0.5,))(model)  # variational biLSTM
         #model = Flatten()(model))
         #model = LSTM(100)(model)
         out = Dense(n_labels, activation='softmax')(model)
@@ -405,6 +365,6 @@ class Learner():
 
 if __name__ == '__main__':
     learner = Learner()
-    learner.learn("features_train.txt", "features_devel.txt", "original")
-    #learner.checkOutputs("firstmodel", "../data/test", "results.txt")
-    #learner.predict("firstmodel", "../data/test", "results.txt")
+    learner.learn("features_train.txt", "features_devel.txt", "adecuate")
+    #learner.checkOutputs("original", "../data/train", "results.txt")
+    #learner.predict("original", "../data/test", "results.txt")
